@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package p2p.sync.v1;
+
+message PeerHello {
+  string peer_id = 1;
+  string peer_name = 2;
+  string ip = 3;
+  uint32 port = 4;
+}
+
+message FileSnapshot {
+  string path = 1;
+  string hash = 2;
+  int64 modified_unix_ms = 3;
+  int64 size_bytes = 4;
+}
+
+message FileUpdate {
+  string update_id = 1;
+  string sender_peer_id = 2;
+  FileSnapshot snapshot = 3;
+  bytes content = 4;
+}
+
