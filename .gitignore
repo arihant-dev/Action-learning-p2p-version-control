@@ -100,3 +100,21 @@ nbdist/
 ## Other generated outputs
 out/
 apidocs/
+
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.dvi
+*.ps
+*.synctex.gz
+*.out
+*.toc
+*.lot
+*.lof
+
+# Local context (not published)
+.project_context.md
+.agent_notes.md

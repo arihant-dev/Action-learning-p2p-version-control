@@ -1,0 +1,215 @@
+\documentclass[11pt,oneside]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{fancyhdr}
+\usepackage{lastpage}
+\usepackage{float}
+\usepackage{longtable}
+
+% Color definitions
+\definecolor{darkblue}{rgb}{0.0, 0.0, 0.5}
+\definecolor{lightgray}{rgb}{0.95, 0.95, 0.95}
+
+% Header and Footer
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\textit{Action Learning P2P Directory Sync}}
+\rhead{\textit{Bibliography}}
+\cfoot{Page \thepage\ of \pageref{LastPage}}
+
+% Title setup
+\title{\Large \textbf{Bibliography: P2P File Synchronization System}\\
+        \normalsize Action Learning Project --- EPITA}
+\author{Arihant Jain (Backend Go) \and Su Huizhe (Backend C++) \and
+        Nizar Soufiya (Frontend) \and Shengkang Duan (Frontend + CI/CD)}
+\date{\today}
+
+% Custom column type for better table layout
+\newcolumntype{L}{>{\raggedright\arraybackslash}p{2.5cm}}
+\newcolumntype{Y}{>{\centering\arraybackslash}p{1.1cm}}
+\newcolumntype{N}{>{\centering\arraybackslash}p{2.0cm}}
+\newcolumntype{C}{>{\raggedright\arraybackslash}p{2.5cm}}
+\newcolumntype{D}{>{\raggedright\arraybackslash}p{3.1cm}}
+\newcolumntype{K}{>{\raggedright\arraybackslash}p{1.9cm}}
+\newcolumntype{U}{>{\raggedright\arraybackslash}p{2.1cm}}
+
+\begin{document}
+
+% Title page with logo
+\begin{titlepage}
+    \centering
+    \vspace*{2cm}
+    
+    % Logo
+    \includegraphics[width=0.3\textwidth]{../screenshots/others/Epita.jpg}\\
+    \vspace{1cm}
+    
+    % Title
+    \textbf{\LARGE Bibliography}\\
+    \textbf{\LARGE P2P File Synchronization System}\\
+    \vspace{0.5cm}
+    
+    % Subtitle
+    \textit{\Large Action Learning Project}\\
+    \vspace{2cm}
+    
+    % Team info
+    \large
+    \begin{tabular}{c}
+        \textbf{Backend (Go, C++)} \\
+        \vspace{0.1em} \\
+        Arihant Jain \\
+        Su Huizhe \\
+        \vspace{1em} \\
+        \textbf{Frontend and CI/CD (Java, GitHub Actions)} \\
+        \vspace{0.1em} \\
+        Nizar Soufiya \\
+        Shengkang Duan \\
+    \end{tabular}
+    
+    \vfill
+    \today
+\end{titlepage}
+
+\newpage
+\tableofcontents
+\newpage
+
+% ============================================================================
+% SECTION 1: IDENTIFIED PAPERS
+% ============================================================================
+\section{Identified Papers}
+
+\renewcommand{\arraystretch}{1.3}
+\scriptsize
+\setlength{\LTleft}{0pt}
+\setlength{\LTright}{0pt}
+\begin{longtable}{|L|Y|N|C|D|K|}
+\hline
+\textbf{TITLE} & \textbf{YEAR} & \textbf{CITATIONS} & \textbf{KEYWORDS} & \textbf{WHY NEEDED?} & \textbf{CORE?} \\
+\hline
+\endfirsthead
+
+\hline
+\textbf{TITLE} & \textbf{YEAR} & \textbf{CITATIONS} & \textbf{KEYWORDS} & \textbf{WHY NEEDED?} & \textbf{CORE?} \\
+\hline
+\endhead
+
+\href{https://doi.org/10.1145/359545.359563}{\textbf{Time, Clocks, and the Ordering of Events in a Distributed System}} & 1978 & 8407 &
+logical clocks, causality & Vector-clock baseline & Core \\
+\hline
+
+\href{https://doi.org/10.1007/3-540-45748-8_5}{\textbf{Kademlia: A Peer-to-Peer Information System Based on the XOR Metric}} & 2002 & 2997 &
+DHT, XOR metric & Peer discovery model & Core \\
+\hline
+
+\href{https://doi.org/10.1007/11558989_19}{\textbf{The BitTorrent P2P File-Sharing System: Measurements and Analysis}} & 2005 & 760 &
+swarming, piece exchange & Chunk synchronization strategy & Yes \\
+\hline
+
+\href{https://rsync.samba.org/tech_report/}{\textbf{The rsync algorithm}} & 1996 & 311 &
+delta encoding, rolling checksum & Efficient block-level diff & Core \\
+\hline
+
+\href{https://hal.inria.fr/inria-00609399/document}{\textbf{A comprehensive study of Convergent and Commutative Replicated Data Types}} & 2011 & 256 &
+CRDT, eventual consistency & Conflict-free merge model & Future \\
+\hline
+
+\href{https://doi.org/10.1145/564585.564601}{\textbf{Brewer's conjecture and the feasibility of consistent, available, partition-tolerant web services}} & 2002 & 1683 &
+CAP, partition tolerance & Consistency trade-off baseline & Core \\
+\hline
+
+\href{https://doi.org/10.1145/1165389.945450}{\textbf{The Google file system}} & 2003 & 5002 &
+distributed FS, replication & Metadata and version layout & Yes \\
+\hline
+
+\href{https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf}{\textbf{Dynamo: Amazon's Highly Available Key-Value Store}} & 2007 & 382 &
+anti-entropy, vector clocks & Replica reconciliation patterns & Yes \\
+\hline
+
+\href{https://lamport.azurewebsites.net/pubs/paxos-simple.pdf}{\textbf{Paxos Made Simple}} & 2001 & 977 &
+consensus, fault tolerance & Coordination fallback option & Future \\
+\hline
+
+\href{https://dl.acm.org/doi/10.5555/1298455.1298487}{\textbf{The Chubby lock service for loosely-coupled distributed systems}} & 2006 & 901 &
+leases, lock service & Leader and lock design & Yes \\
+\hline
+
+\href{https://www.usenix.org/legacy/event/atc10/tech/full_papers/Hunt.pdf}{\textbf{ZooKeeper: wait-free coordination for internet-scale systems}} & 2010 & 1314 &
+coordination, metadata nodes & Distributed coordination API & Yes \\
+\hline
+
+\href{https://www.usenix.org/legacy/event/osdi06/tech/full_papers/weil/weil.pdf}{\textbf{Ceph: a scalable, high-performance distributed file system}} & 2006 & 1430 &
+metadata, distributed storage & Storage architecture reference & Yes \\
+\hline
+
+\href{https://doi.org/10.1145/224056.224070}{\textbf{Managing update conflicts in Bayou, a weakly connected replicated storage system}} & 1995 & 813 &
+weak consistency, anti-entropy & Conflict-policy design input & Future \\
+\hline
+
+\href{https://man7.org/linux/man-pages/man7/inotify.7.html}{\textbf{inotify(7) --- Linux manual page}} & 2005 & N/A &
+Linux kernel events & Linux file watcher API & Core \\
+\hline
+
+\href{https://developer.apple.com/library/archive/documentation/Darwin/Conceptual/FSEvents_ProgGuide/Introduction/Introduction.html}{\textbf{File System Events Programming Guide (Apple)}} & 2007 & N/A &
+macOS file events & macOS file watcher API & Core \\
+\hline
+
+\end{longtable}
+
+\clearpage
+
+% ============================================================================
+% SECTION 2: CHOSEN PAPERS
+% ============================================================================
+\section{Chosen Papers}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.3}
+\scriptsize
+\begin{tabular}{|L|Y|N|C|D|U|}
+\hline
+\textbf{TITLE} & \textbf{YEAR} & \textbf{CITATIONS} & \textbf{KEYWORDS} & \textbf{WHY NEEDED?} & \textbf{USED} \\
+\hline
+
+\href{https://www.rfc-editor.org/rfc/rfc6762}{\textbf{RFC 6762: Multicast DNS}} & 2013 & N/A &
+mDNS, peer discovery & LAN peer discovery protocol & Phase 1 \\
+\hline
+
+\href{https://www.rfc-editor.org/rfc/rfc6763}{\textbf{RFC 6763: DNS-Based Service Discovery}} & 2013 & N/A &
+DNS-SD, service advertisement & Service registration and lookup & Phase 1 \\
+\hline
+
+\href{https://doi.org/10.1145/359545.359563}{\textbf{Time, Clocks, and the Ordering of Events in a Distributed System}} & 1978 & 8407 &
+logical clocks, causality & Vector-clock baseline & Phase 2+ \\
+\hline
+
+\href{https://rsync.samba.org/tech_report/}{\textbf{The rsync algorithm}} & 1996 & 311 &
+delta encoding, rolling checksum & File-diff algorithm for sync & Phase 2+ \\
+\hline
+
+\href{https://doi.org/10.1145/564585.564601}{\textbf{Brewer's conjecture and the feasibility of consistent, available, partition-tolerant web services}} & 2002 & 1683 &
+CAP, partition tolerance & Consistency trade-off baseline & Design \\
+\hline
+
+\href{https://hal.inria.fr/inria-00609399/document}{\textbf{A comprehensive study of Convergent and Commutative Replicated Data Types}} & 2011 & 256 &
+CRDT, eventual consistency & Conflict-free merge model & Future \\
+\hline
+
+\href{https://man7.org/linux/man-pages/man7/inotify.7.html}{\textbf{inotify(7) --- Linux manual page}} & 2005 & N/A &
+Linux kernel events & Linux file watcher API & Phase 1 \\
+\hline
+
+\href{https://developer.apple.com/library/archive/documentation/Darwin/Conceptual/FSEvents_ProgGuide/Introduction/Introduction.html}{\textbf{File System Events Programming Guide (Apple)}} & 2007 & N/A &
+macOS file events & macOS file watcher API & Phase 1 \\
+\hline
+
+\end{tabular}
+\end{table}
+
+\end{document}
