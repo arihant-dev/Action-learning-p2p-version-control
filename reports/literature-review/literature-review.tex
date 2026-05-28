@@ -2,6 +2,7 @@
 \usepackage[margin=1in]{geometry}
 \usepackage{graphicx}
 \usepackage{hyperref}
+\usepackage{cite}
 \usepackage{booktabs}
 \usepackage{array}
 \usepackage{xcolor}
@@ -18,11 +19,11 @@
 \pagestyle{fancy}
 \fancyhf{}
 \lhead{\textit{Action Learning P2P Directory Sync}}
-\rhead{\textit{Bibliography}}
+\rhead{\textit{Literature Review}}
 \cfoot{Page \thepage\ of \pageref{LastPage}}
 
 % Title setup
-\title{\Large \textbf{Bibliography: P2P File Synchronization System}\\
+\title{\Large \textbf{Literature Review: P2P File Synchronization System}\\
         \normalsize Action Learning Project --- EPITA}
 \author{Arihant Jain (Backend Go) \and Su Huizhe (Backend C++) \and
         Nizar Soufiya (Frontend) \and Shengkang Duan (Frontend + CI/CD)}
@@ -49,7 +50,7 @@
     \vspace{1cm}
     
     % Title
-    \textbf{\LARGE Bibliography}\\
+    \textbf{\LARGE Literature Review}\\
     \textbf{\LARGE P2P File Synchronization System}\\
     \vspace{0.5cm}
     
@@ -86,198 +87,122 @@
 
 \subsection{Scenario and Pain Points}
 
-To motivate the problem, we begin with a concrete collaborative scenario commonly observed in university projects.\par
-University students frequently work in temporary groups and need to exchange files efficiently without relying on complex infrastructure, cloud account management, or external storage devices. During the course of a project, team members collaboratively produce and modify heterogeneous files, including source code, documents, images, datasets, and presentation materials. Since collaborators often use different operating systems and development environments, cross-platform compatibility further increases the complexity of file sharing and coordination.\par
-In practice, temporary student teams usually lack the time, resources, and technical expertise required to maintain a dedicated file management or synchronization system. As a result, files are often exchanged through ad hoc communication channels such as group chats or email attachments. This approach introduces several issues, including duplicated files, inconsistent versions, lack of synchronization, and absence of proper change tracking.\par
-In addition, ownership and persistence of project data become problematic once the collaboration ends. Some members may wish to preserve the project files for future reference, while others may prefer to discard them. However, because the files are typically distributed informally and managed inconsistently, long-term access often depends on a single individual maintaining the archive. This creates risks of data loss, incomplete project history, and fragmented ownership.\par
-Therefore, the students require a lightweight and decentralized solution that enables them to:
-\begin{itemize}
-    \item create a shared repository without complicated server deployment or administrative setup;
-    \item support synchronization of heterogeneous file types across multiple platforms;
-    \item track modifications and maintain version history;
-    \item provide shared ownership of project data among collaborators; and
-    \item avoid dependence on a single participant for long-term storage, archival, or deletion of the project files.
-\end{itemize}
+\textit{TODO (team): add scenario and pain points.}
 
 \subsection{Problem Definition}
 
-Based on the scenario described above, small-scale collaborative groups require a file-sharing mechanism that is lightweight, decentralized, and easy to use. In such environments, participants mainly care about whether they can quickly form a shared workspace, exchange project files reliably, preserve previous versions when changes are made, and continue working with the shared folder as if it were a normal local directory.\par
-From this objective, the problem can be defined as the design of a peer-to-peer directory-level synchronization system with lightweight version control. More specifically, the system must solve the following technical problems:
-
-\begin{itemize}
-\item \textbf{Local peer discovery and dynamic membership.}
-The system must discover available peers on the same local network without relying on a central server. It should also support dynamic participation, where peers may join, leave, or temporarily disconnect during collaboration.
-
-\item \textbf{Directory-level change detection and propagation.}
-The system must monitor a shared local directory and detect file creation, modification, and deletion events. These changes should be propagated to other online peers without requiring users to manually upload, download, or explicitly send files.
-
-\item \textbf{Rapid synchronization among online peers.}
-When a change occurs, the system should synchronize the updated state to other available peers within a short delay, so that collaborators can observe a consistent project workspace during active collaboration.
-
-\item \textbf{Support for heterogeneous file types and large files.}
-The system must handle different categories of project files, including text files, source code, documents, images, and binary files. For large files, the system should support efficient transfer mechanisms rather than assuming that every file can be sent as a single small message.
-
-\item \textbf{Simple versioning and rollback.}
-Before a file is overwritten by a synchronized update, the system should preserve an older copy or historical state. This provides a basic recovery mechanism against accidental overwrites, incorrect updates, or unintended file changes.
-
-\item \textbf{Transparent integration with the local file system.}
-The shared workspace should behave like a normal directory on the user's computer. Users should be able to create, edit, move, and delete files using their usual tools, while synchronization and version management are handled by the system in the background.
-\end{itemize}
-Therefore, the central technical problem is to provide a serverless, peer-to-peer, directory-level synchronization mechanism that supports dynamic local-network collaboration, heterogeneous file transfer, rapid update propagation, and basic version recovery while preserving the simplicity of a normal local folder. 
+\textit{TODO (team): add problem definition.}
 
 \section{Overview of Existing Work}
-We will go over the existing solutions…here.
-For application level: We need to check popular application settled in this scenario….
-Code sharing: Github, gitlab…
-
-File sharing: Google docs/google driver, Drop Box, Nextcloud
-
-Directory and ownership sharing: Teams
-
-P2p sharing: resilio sync, syncthing
-
-P2p storage: IPFS, Tahoe-LAFS
-
-For Technical level… we need to go through the existing distributed system and p2p…
-
-Versioning method: Git, SVN, Perforce..
-
-P2p protocols…
-
-Sharing: Local Lan, over bluetooth, air drop, …
+\textit{TODO (team): summarize existing work and systems.}
 
 \section{Comparison of Approaches}
-This will be done based on what we have found in the previous on. Basically, we need to focus on:
+We compare tools by setup effort, server need, and directory sync for mixed files \cite{googledrive,dropbox,gitbook,github,syncthing,resilio}.
 
-Application Level:
+\begin{table}[H]
+\centering
+\scriptsize
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{|L|Y|Y|Y|Y|Y|N|}
+\hline
+\textbf{Approach} & \textbf{Setup} & \textbf{Server} & \textbf{Dir} & \textbf{Version} & \textbf{Conflict} & \textbf{\shortstack{Binary\\Large}} \\
+\hline
+Drive/Dropbox & Med & Yes & Yes & Limited & Limited & Quotas \\
+Git/GitHub & High & Hosted & Repo & Strong & Manual & Weak \\
+Syncthing & Low & No & Yes & Limited & Basic & Good \\
+Resilio Sync & Low & No & Yes & Limited & Basic & Good \\
+\shortstack{Our system\\(hyp.)} & Low & No & Yes & Rollback & LWW & Good \\
+\hline
+\end{tabular}
+\end{table}
 
-Central server v.s. distributed
-
-Directory sharing/file sharing
-
-Large file support/binary file support
+Cloud tools need accounts and servers. VCS tools provide history but add workflow steps and handle binaries poorly. Syncthing/Resilio avoid servers but still have limited rollback and conflict handling. Our design targets that gap with account-free LAN sync plus LWW rollback \cite{bayou1995}. We expect shorter setup, lower LAN latency, and better recovery; these are hypotheses.
 
 \section{Identified Gap}
 
-University students and small collaborative teams face significant constraints when choosing file-sharing solutions for project work. The current landscape presents a fundamental gap: either users rely on centralized services with inherent limitations, or they resort to ad hoc peer-to-peer tools that lack critical versioning and conflict-resolution features.
-
 \subsection{Limitations of Centralized Solutions}
-
-Cloud-based file sharing services (Google Drive, GitHub, Microsoft Teams) introduce several technical and operational challenges:
-\begin{itemize}
-    \item \textbf{Centralized infrastructure dependency:} These services require persistent internet connectivity and rely on third-party servers, introducing latency, availability risks, and potential data privacy concerns in institutional or air-gapped environments.
-    \item \textbf{Limited file type and size support:} Platforms optimized for documents or source code often struggle with heterogeneous file types (datasets, binaries, media files) and impose storage quotas.
-    \item \textbf{Communication friction:} Most file sharing occurs through secondary communication channels (email, messaging apps), separating file distribution from the actual collaboration workspace.
-    \item \textbf{Ownership and permission bottlenecks:} Centralized ownership models (e.g., GitHub branch protection, Google Drive permissions) introduce approval delays and reduce team autonomy. Changes may require owner confirmation (e.g., merge requests), slowing iteration cycles during active sprints.
-\end{itemize}
+\textit{TODO (team): add limits of centralized solutions.}
 
 \subsection{Limitations of Existing Peer-to-Peer Solutions}
-
-While peer-to-peer services (AirDrop, Syncthing) avoid centralization, they present their own constraints:
-\begin{itemize}
-    \item \textbf{Absence of versioning:} Most P2P file-sharing tools provide no built-in history or rollback capability, making accidental overwrites irreversible.
-    \item \textbf{Directory structure inconsistency:} Local P2P services often fail to maintain directory-level consistency and do not integrate seamlessly with the file system abstraction.
-    \item \textbf{Limited conflict resolution:} Concurrent edits and synchronization failures lack deterministic handling strategies.
-\end{itemize}
+\textit{TODO (team): add limits of existing P2P solutions.}
 
 \subsection{The Gap}
-
-The gap is clear: no lightweight, decentralized, directory-level file synchronization tool exists that combines the freedom of peer-to-peer sharing with the safety of version history, the simplicity of local network operation, and support for heterogeneous file types without permission bottlenecks.
+\textit{TODO (team): describe the gap.}
 
 \section{Positioning Your Project}
 
-Our project addresses this gap by providing a lightweight, decentralized, directory-level file synchronization system designed specifically for local-network collaboration among small teams. Unlike centralized cloud services or generic P2P tools, our solution combines the best aspects of both approaches while remaining simple and portable.
-
 \subsection{Key Differentiators}
-
-\begin{itemize}
-    \item \textbf{Local network operation:} Our system operates entirely within the local network (WLAN/Bluetooth), eliminating dependency on external servers and providing immediate, latency-free collaboration.
-    \item \textbf{Heterogeneous file support:} The system places no artificial restrictions on file types or sizes. Any file readable by the operating system can be synchronized. The only practical limit is the available disk space and the OS's own capabilities.
-    \item \textbf{Built-in versioning and rollback:} Unlike most P2P solutions, our system automatically preserves previous versions of files before overwriting them, providing a safety net against accidental modifications or conflicts.
-    \item \textbf{Lightweight and portable:} Designed as a simple, portable application with an intuitive user interface. No server configuration, administrative privileges, or complex setup required. Users simply select a folder and begin collaborating.
-    \item \textbf{Transparent file system integration:} The shared directory behaves like a normal folder on the user's computer. Synchronization, versioning, and conflict resolution happen transparently in the background, without requiring users to master specialized workflows (like Git commits or merge requests).
-\end{itemize}
+\textit{TODO (team): add key differentiators.}
 
 \subsection{Design Philosophy}
-
-Our approach prioritizes \textbf{simplicity}, \textbf{autonomy}, and \textbf{reliability}:
-\begin{itemize}
-    \item \textbf{Simplicity:} Minimize user friction. File sharing and versioning should "just work" without requiring users to understand distributed systems, conflict resolution, or version control concepts.
-    \item \textbf{Autonomy:} No ownership bottlenecks. Any peer can modify files; changes propagate to all peers without requiring approval or synchronization ceremonies.
-    \item \textbf{Reliability:} Preserve data safety. Version history protects against accidental overwrites; deterministic conflict resolution ensures consistent behavior across all peers.
-\end{itemize}
+\textit{TODO (team): add design philosophy.}
 
 \section{Research to Application Mapping}
 \begin{itemize}
 	\item \textbf{Zero-configuration peer discovery on LAN}
 	\begin{itemize}
-		\item \textbf{Research Insight: } mDNS + DNS-SD provide lightweight discovery without a central server in local networks
-		\item \textbf{Application in project}: Implement Go-based peer discovery with automatic advertise/browse behaviour; use WLAN as primary transport.
+		\item \textbf{Research Insight:} mDNS and DNS-SD use multicast queries and service records to find services without a central server \cite{rfc6762,rfc6763}.
+		\item \textbf{Application in project}: Use Go advertise/browse on LAN so peers can join without accounts or setup.
 	\end{itemize}
-
-	\item \textbf{Casual ordering for concurrent updates}
+ 
+	\item \textbf{Causal ordering for concurrent updates}
 \begin{itemize}
-	\item \textbf{Research Insight:} Logical clocks and event ordering reduce ambiguity when multiple peers edit concurrently.
-	\item \textbf{Application in project:} Track per-file version metadata (timestamps + vector-clock style state) in the coordination layer before resolving conflicts.
+	\item \textbf{Research Insight:} Logical clocks help detect concurrent edits without a global clock \cite{lamport1978}.
+	\item \textbf{Application in project:} Track per-file metadata (timestamps + vector-clock style state) before conflict handling.
 \end{itemize}
-
+ 
 \item \textbf{Consistency strategy under failures and partitions}
 \begin{itemize}
-	\item \textbf{Research Insight:} CAP trade-oofs show that perfect consistency is difficult during partition/offline scenarios.
-	\item \textbf{Application in project:} Favor availability and eventual convergence on LAN; use deterministic conflict policy (LWW(Last-Write-Wins) + backup copy) and resync after reconnection.
+	\item \textbf{Research Insight:} CAP shows strict consistency is hard under partitions; weakly connected systems use deterministic rules to converge \cite{brewer2002,bayou1995}.
+	\item \textbf{Application in project:} Favor availability on LAN; use LWW + backups and resync after reconnection.
 \end{itemize}
-
+ 
 \item \textbf{Conflict-handling evolution path}
 \begin{itemize}
-	\item \textbf{Research Insight:} CRDTs can avoid some mutual conflict handling but increase design complexity.
-	\item \textbf{Application in project:} Keep CRDT as a future extension; current releases uses simpler LWW(Last-Write-Wins) + version-backup workflow for predictable behavior.
+	\item \textbf{Research Insight:} CRDTs can avoid conflicts but add state and complexity \cite{shapiro2011}.
+	\item \textbf{Application in project:} Keep CRDTs for later; use LWW + backup now.
 \end{itemize}
-
+ 
 \item \textbf{Bandwidth-efficient synchronization direction}
 \begin{itemize}
-\item \textbf{Research Insight:} Delta-based transfer (rsync-style) reduces unnecessary data movement for large or partially changes files.
-\item \textbf{Application in Project:} Start with whole-file transfer for implementation simplicity, then add block-diff optimization for larger files and multi-peer scaling. 
+\item \textbf{Research Insight:} Delta transfer (rsync-style) reduces data sent for large or partial changes \cite{rsync1996}.
+\item \textbf{Application in Project:} Start with whole-file transfer, then add block-level diffs for large files and multi-peer scaling.
+\end{itemize}
+
+\item \textbf{Local change detection primitives}
+\begin{itemize}
+    \item \textbf{Research Insight:} OS event APIs (inotify, FSEvents) provide change streams without polling \cite{inotify7,fsevents}.
+    \item \textbf{Application in project:} Use native watchers per OS to capture add/modify/delete events and trigger sync.
+\end{itemize}
+
+\item \textbf{Content identity and transport}
+\begin{itemize}
+    \item \textbf{Research Insight:} SHA-256 gives content identity for integrity checks, and TCP gives reliable ordered delivery \cite{fips1804,rfc9293}.
+    \item \textbf{Application in project:} Hash files for change detection and verification, and move data over TCP sockets between peers.
 \end{itemize}
 \end{itemize}
 \section{Key References}
-\begin{enumerate}
-	\item RFC 6762 + RFC 6763 (Multicast DNS; DNS-Based Service Discovery) - foundation for LAN peer discovery and service advertisement. \texttt{[RFC6762\_6763]}
-	\item Lamport, L. (1978). \textit{Time, Clocks and the Ordering of Events in a Distributed Systems} - casual ordering baseline for concurrent file-updating reasoning. \texttt{[Lamport1978]}
-	\item Brewer, E.A. (2002). \textit{Brewer’s conjecture and the feasibility of consistent, available, partition-tolerant web services} - consistency/availability trade-off baseline during node failure or disconnection. \ texttt{[Brewer2002]}
-	\item Shapiro, M. et al. (2011). \textit{A comprehensive study of Convergent and Commutative Replicated Data Types} - future model for conflict-free replication in advanced versions. \texttt{[Shapiro2011]}
-	\item Tridgell, A., \& Mackerras, P. (1996). \textit{the rsync algorithm} - reference for later delta-sync optimization in large-file transfers. \texttt{[Rsync1996]}
-\end{enumerate}
+Key sources that ground the design choices:
+\begin{itemize}
+    \item \textbf{LAN service discovery:} RFC 6762/6763 define zero-configuration discovery and advertisement for local networks \cite{rfc6762,rfc6763}.
+    \item \textbf{Causal ordering:} Lamport’s logical clocks establish ordering guarantees for concurrent updates \cite{lamport1978}.
+    \item \textbf{Consistency trade-offs:} Brewer’s CAP perspective informs availability-first design under partitions \cite{brewer2002}.
+    \item \textbf{Conflict-free replication path:} CRDTs provide a future option for conflict avoidance at the cost of added complexity \cite{shapiro2011}.
+    \item \textbf{Efficient sync:} The rsync algorithm motivates later delta-transfer optimizations \cite{rsync1996}.
+    \item \textbf{Implementation primitives:} SHA-256, file event APIs, and TCP support hashing, change detection, and transport \cite{fips1804,inotify7,fsevents,rfc9293}.
+\end{itemize}
 
 \section{Conclusion}
+The literature suggests: make LAN discovery and sync automatic, and use simple, deterministic conflict rules.
 \begin{itemize}
-	\item \textbf{What did you learn from the literature?}
-	\begin{itemize}
-		\item Practical LAN P2P sync is best grounded in mature discovery standards (mDNS/DNS)
-		\item Concurrent updates require careful version tracking and deterministic conflict resolution for predictable user experience.
-        \item Perfect consistency is not achievable during partitions; favor availability and eventual convergence in local
-        \item CRDTs are promising for future conflict-free replication but add complexity; simpler LWW + backup is a good starting point.
-        \item Delta-based synchronization can optimize bandwidth for large files but should be added after a working whole-file transfer implementation.
-    \end{itemize}
-    \item \textbf{How did the literature influence your design?}
-    \begin{itemize}
-        \item We chose mDNS/DNS-SD for peer discovery to avoid central servers and simplify LAN collaboration.
-        \item We implemented per-file version metadata and a deterministic LWW conflict policy to handle concurrent edits predictably.
-        \item We designed the system to favor availability and eventual convergence during partitions, with resync after reconnection.
-        \item We deferred CRDT implementation to future versions, starting with a simpler versioning and backup approach for conflict handling.
-        \item We prioritized whole-file transfer for initial implementation, with plans to add delta-sync optimization later.
-    \end{itemize}
-    \item \textbf{What are the limitations of the existing work?}
-     \begin{itemize}
-        \item Many existing solutions either require central servers (Google Drive, GitHub) or lack versioning and conflict resolution (AirDrop).
-        \item Some systems support versioning but do not handle dynamic peer discovery or local synchronization well (Git).
-        \item Few solutions provide a seamless directory-level sync experience with heterogeneous file support and simple version recovery for small-scale LAN collaboration.
-    \end{itemize}
-    \item \textbf{What are the next steps in your project?}
-    \begin{itemize}
-        \item Implement the core peer discovery and directory synchronization features based on the insights from the literature.
-        \item Test the system in real-world LAN environments with multiple peers and various file types to evaluate performance and usability.
-        \item Plan for future enhancements, including CRDT-based conflict resolution and delta-sync optimization, based on user feedback and observed limitations.
-    \end{itemize}
+    \item \textbf{Key takeaways.} LAN discovery standards and ordering help collaboration, while availability-first consistency with deterministic conflict handling fits weakly connected teams.
+    \item \textbf{Design influence.} We use mDNS/DNS-SD, per-file metadata, LWW + backup, and whole-file transfer as the baseline, with delta-sync and CRDTs reserved for later.
+    \item \textbf{Limits in existing tools.} Cloud platforms depend on servers, VCS tools add workflow overhead, and P2P sync tools lack rollback for temporary, multi-owner teams.
 \end{itemize}
+Overall, we keep shared-folder UX while adding version safety. The expected advantages (setup time, LAN latency, recovery safety) remain hypotheses to test.
+
+\newpage
+\bibliographystyle{IEEEtran}
+\bibliography{literature-review}
 
 \end{document}
