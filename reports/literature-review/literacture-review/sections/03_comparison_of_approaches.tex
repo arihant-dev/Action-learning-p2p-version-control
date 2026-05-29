@@ -1,6 +1,18 @@
 \section{Comparison of Approaches}
 We compare collaborative file synchronization tools by setup effort, server requirements, and capability to synchronize heterogeneous files across local meshes \cite{googledrive,dropbox,gitbook,github,syncthing,resilio}.
 
+
+\subsection{Comparison Dimensions}
+
+\subsection{Centralized and Decentralized Collaboration}
+
+\subsection{Version Management and Synchronization}
+
+\subsection{Temporary Sharing and Continuous Collaboration}
+
+\subsection{Summary of Trade-offs}
+
+
 \subsection{Evaluation of Existing Paradigms}
 \begin{enumerate}
     \item \textbf{Cloud Directory Services} (e.g., Google Drive \cite{googledrive}, Dropbox \cite{dropbox}, Nextcloud): \\
@@ -20,60 +32,63 @@ We analyze the differences between the leading peer-to-peer synchronization tool
     \item \textbf{Lightweight Collaboration Gap:} Both tools act as generic directory mirrors rather than project-specific workspaces. They lack automated, non-destructive version histories that team members can navigate easily. If a peer saves a broken draft, that file immediately overwrites the state of all other online peers, requiring complex administrative configuration to recover.
 \end{itemize}
 
-\subsection{Proposed P2P Synchronization System}
-To address these limitations, we propose a serverless local directory synchronization system. It combines the direct transfer speed of P2P mirroring with the version safety of a lightweight revision tool. The proposed system features:
-\begin{itemize}
-    \item \textbf{Zero Configuration (planned):} Peer discovery relies on Multicast DNS (mDNS) \cite{rfc6762} and DNS-SD \cite{rfc6763} broadcasts on the local subnet, forming a sync mesh without manual IP or node ID exchange.
-    \item \textbf{Local Socket Transfer (planned):} TCP connections \cite{rfc9293} handle data replication directly between peers over the local network, avoiding external server roundtrips.
-    \item \textbf{Autonomous Coordination (planned):} Every node acts as an independent repository coordinator, allowing concurrent edits that propagate without administrative approval bottlenecks.
-    \item \textbf{Durability and Recovery (planned):} We combine a Last-Write-Wins (LWW) conflict policy with automated local backups before any overwrite. This avoids the implementation complexity of vector clocks or CRDTs for small-scale student teams (3–5 peers).
-\end{itemize}
+% NOTE: This part should be moved to positioning...
+% \subsection{Proposed P2P Synchronization System}
+% To address these limitations, we propose a serverless local directory synchronization system. It combines the direct transfer speed of P2P mirroring with the version safety of a lightweight revision tool. The proposed system features:
+% \begin{itemize}
+%     \item \textbf{Zero Configuration (planned):} Peer discovery relies on Multicast DNS (mDNS) \cite{rfc6762} and DNS-SD \cite{rfc6763} broadcasts on the local subnet, forming a sync mesh without manual IP or node ID exchange.
+%     \item \textbf{Local Socket Transfer (planned):} TCP connections \cite{rfc9293} handle data replication directly between peers over the local network, avoiding external server roundtrips.
+%     \item \textbf{Autonomous Coordination (planned):} Every node acts as an independent repository coordinator, allowing concurrent edits that propagate without administrative approval bottlenecks.
+%     \item \textbf{Durability and Recovery (planned):} We combine a Last-Write-Wins (LWW) conflict policy with automated local backups before any overwrite. This avoids the implementation complexity of vector clocks or CRDTs for small-scale student teams (3–5 peers).
+% \end{itemize}
 
-\subsection{Core Project Hypotheses}
-We formulate the following testable scientific hypotheses to guide the evaluation of our proposed system:
-\begin{itemize}
-    \item \textbf{Primary Hypothesis ($H_1$):} A localized, serverless synchronization architecture using mDNS/DNS-SD discovery and direct TCP socket replication can achieve sub-second average synchronization latency on standard local area networks (WLAN) without reliance on external cloud infrastructure.
-    \item \textbf{Secondary Hypothesis ($H_2$):} Utilizing a single logical timestamp (Lamport clock) counter per file, paired with a deterministic Last-Write-Wins (LWW) resolution rule and local file backups, provides sufficient consistency and rollback recovery for small-scale collaborative teams (3-5 peers) while avoiding the state and computational overhead of vector clocks or CRDTs.
-\end{itemize}
+% NOTE: This part should be moved to later section where I don't really know.
+% \subsection{Core Project Hypotheses}
+% We formulate the following testable scientific hypotheses to guide the evaluation of our proposed system:
+% \begin{itemize}
+%     \item \textbf{Primary Hypothesis ($H_1$):} A localized, serverless synchronization architecture using mDNS/DNS-SD discovery and direct TCP socket replication can achieve sub-second average synchronization latency on standard local area networks (WLAN) without reliance on external cloud infrastructure.
+%     \item \textbf{Secondary Hypothesis ($H_2$):} Utilizing a single logical timestamp (Lamport clock) counter per file, paired with a deterministic Last-Write-Wins (LWW) resolution rule and local file backups, provides sufficient consistency and rollback recovery for small-scale collaborative teams (3-5 peers) while avoiding the state and computational overhead of vector clocks or CRDTs.
+% \end{itemize}
 
-\subsection{Structured Comparison Table}
-Table \ref{tab:comparison} evaluates the feature tradeoffs of the three paradigms.
-
-\begin{longtable}{>{\raggedright\arraybackslash}p{3.2cm} >{\raggedright\arraybackslash}p{3.8cm} >{\raggedright\arraybackslash}p{3.8cm} >{\raggedright\arraybackslash}p{3.8cm}}
-\caption{Comparison of Collaborative File Sharing and Synchronization Approaches} \label{tab:comparison} \\
-\toprule
-\textbf{Feature / Dimension} & \textbf{Cloud Directory Services} & \textbf{Version Control Systems} & \textbf{P2P File Sync (Proposed)} \\
-\midrule
-\endfirsthead
-\multicolumn{4}{c}{{\bfseries Table \thetable\ -- Continued from previous page}} \\
-\midrule
-\textbf{Feature / Dimension} & \textbf{Cloud Directory Services} & \textbf{Version Control Systems} & \textbf{P2P File Sync (Proposed)} \\
-\midrule
-\endhead
-\midrule
-\multicolumn{4}{r}{{Continued on next page}} \\
-\endfoot
-\bottomrule
-\endlastfoot
-Primary Topology & Centralized Client-Server & Distributed (DAG-based) & Peer-to-Peer (Mesh) \\
-\midrule
-Network Discovery & Centralized cloud portal & Remote repository server & Local mDNS / LAN broadcast \\
-\midrule
-Setup Complexity & Account setup & Repository creation / auth & Low (auto-discovery planned) \\
-\midrule
-Target Use Case & Generic office documents & Source code tracking & Live directory mirroring \\
-\midrule
-Conflict Resolution & Duplicate file generation & Manual merges / diff resolution & LWW (planned) \\
-\midrule
-Version Control & Periodic file revisions & Explicit commits and branches & Local backups (planned) \\
-\midrule
-File Watcher & Periodic polling & Manual staging & Kernel events (planned) \\
-\midrule
-Bandwidth Efficiency & Server upload/download & Incremental compression diffs & Direct sockets / planned delta sync \\
-\midrule
-Internet Dependency & High (cloud servers required) & High (for pull/push) & None (offline-capable) \\
-\midrule
-Data Privacy & Low (third-party storage) & Medium (third-party servers) & High (local-only storage) \\
-\midrule
-Access Permissions & Centralized ACL approvals & Branch rules and PR reviews & Peer-to-peer access \\
-\end{longtable}
+% NOTE: This part also should be moved to later section. 
+% \subsection{Structured Comparison Table}
+% Table \ref{tab:comparison} evaluates the feature tradeoffs of the three paradigms.
+%
+% \begin{longtable}{>{\raggedright\arraybackslash}p{3.2cm} >{\raggedright\arraybackslash}p{3.8cm} >{\raggedright\arraybackslash}p{3.8cm} >{\raggedright\arraybackslash}p{3.8cm}}
+% \caption{Comparison of Collaborative File Sharing and Synchronization Approaches} \label{tab:comparison} \\
+% \toprule
+% \textbf{Feature / Dimension} & \textbf{Cloud Directory Services} & \textbf{Version Control Systems} & \textbf{P2P File Sync (Proposed)} \\
+% \midrule
+% \endfirsthead
+% \multicolumn{4}{c}{{\bfseries Table \thetable\ -- Continued from previous page}} \\
+% \midrule
+% \textbf{Feature / Dimension} & \textbf{Cloud Directory Services} & \textbf{Version Control Systems} & \textbf{P2P File Sync (Proposed)} \\
+% \midrule
+% \endhead
+% \midrule
+% \multicolumn{4}{r}{{Continued on next page}} \\
+% \endfoot
+% \bottomrule
+% \endlastfoot
+% Primary Topology & Centralized Client-Server & Distributed (DAG-based) & Peer-to-Peer (Mesh) \\
+% \midrule
+% Network Discovery & Centralized cloud portal & Remote repository server & Local mDNS / LAN broadcast \\
+% \midrule
+% Setup Complexity & Account setup & Repository creation / auth & Low (auto-discovery planned) \\
+% \midrule
+% Target Use Case & Generic office documents & Source code tracking & Live directory mirroring \\
+% \midrule
+% Conflict Resolution & Duplicate file generation & Manual merges / diff resolution & LWW (planned) \\
+% \midrule
+% Version Control & Periodic file revisions & Explicit commits and branches & Local backups (planned) \\
+% \midrule
+% File Watcher & Periodic polling & Manual staging & Kernel events (planned) \\
+% \midrule
+% Bandwidth Efficiency & Server upload/download & Incremental compression diffs & Direct sockets / planned delta sync \\
+% \midrule
+% Internet Dependency & High (cloud servers required) & High (for pull/push) & None (offline-capable) \\
+% \midrule
+% Data Privacy & Low (third-party storage) & Medium (third-party servers) & High (local-only storage) \\
+% \midrule
+% Access Permissions & Centralized ACL approvals & Branch rules and PR reviews & Peer-to-peer access \\
+% \end{longtable}
