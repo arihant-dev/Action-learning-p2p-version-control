@@ -186,11 +186,94 @@ For example, users of \textit{Git} must explicitly manage
 repository state and revision history rather than relying on
 fully transparent background synchronization.
 
-\subsection{Centralized and Decentralized Collaboration}
+\subsection{Peer-to-Peer Synchronization Systems}
 
-\subsection{Version Management and Synchronization}
+Representative examples of peer-to-peer synchronization
+systems include \textit{Syncthing} and \textit{Resilio Sync}.
+Both systems are designed to synchronize shared folders across
+multiple devices without relying on centralized cloud storage.
+Instead, participating devices communicate directly with one
+another and collectively maintain replicated copies of shared
+data.
 
-\subsection{Temporary Sharing and Continuous Collaboration}
+\subsubsection{Membership Management}
+
+In peer-to-peer synchronization systems, membership management
+is usually organized around devices, shared folders, and access
+credentials rather than centralized user accounts. A peer must
+be authorized before it can participate in the synchronization
+of a shared directory.
+
+For example, \textit{Syncthing} manages membership through
+device identifiers and folder sharing approvals. A device can
+join a synchronized folder only after the relevant peers approve
+the sharing relationship. \textit{Resilio Sync} uses secret keys
+or sharing links to grant access to synchronized folders, so
+possession of the appropriate key determines whether a device
+can join the group.
+
+\subsubsection{Synchronization Model}
+
+Synchronization is the primary strength of peer-to-peer
+synchronization systems. File changes are automatically
+detected and propagated among participating devices without
+requiring explicit user intervention.
+
+For example, when a file is modified within a synchronized
+folder in \textit{Syncthing}, the update is automatically
+distributed to other connected devices. Changes may also be
+propagated after temporary disconnections, allowing
+participants to continue working while offline and synchronize
+once connectivity is restored.
+
+\subsubsection{History Management}
+
+Peer-to-peer synchronization systems generally provide limited
+support for history management. Their primary objective is to
+maintain consistent copies of files rather than preserve
+comprehensive revision histories.
+
+For example, \textit{Syncthing} offers file versioning
+mechanisms that can retain previous copies of modified files.
+However, these mechanisms are typically based on snapshots or
+archived versions rather than structured revision tracking.
+
+As a result, rollback capabilities are usually available, but
+conflict resolution and long-term history management remain
+less sophisticated than those provided by dedicated version
+control systems.
+
+\subsubsection{File Support}
+
+Peer-to-peer synchronization systems support a wide variety of
+file types, including source code, documents, images,
+multimedia content, datasets, and other binary assets.
+
+For example, both \textit{Syncthing} and \textit{Resilio Sync}
+can synchronize heterogeneous project directories containing
+mixed file types without requiring specialized handling for
+individual formats.
+
+Large files are also supported, making these systems suitable
+for collaborative projects involving multimedia content or
+other storage-intensive resources.
+
+\subsubsection{Filesystem Transparency and Usability}
+
+Peer-to-peer synchronization systems typically integrate
+directly with the local filesystem through ordinary
+directories. Users can create, modify, move, and delete files
+using their preferred tools while synchronization occurs in
+the background.
+
+For example, synchronized folders in \textit{Syncthing}
+appear as normal directories on the local machine, allowing
+users to work without interacting directly with the
+synchronization protocol.
+
+This approach provides strong filesystem transparency and
+requires relatively little workflow adaptation compared with
+traditional version control systems.
 
 \subsection{Summary of Trade-offs}
 
