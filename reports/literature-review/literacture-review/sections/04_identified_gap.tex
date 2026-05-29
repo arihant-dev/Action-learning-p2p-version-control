@@ -1,10 +1,212 @@
 \section{Identified Gap}
 
 \subsection{Limitations of Centralized Solutions}
-\textit{TODO (team): add limits of centralized solutions.}
+
+Centralized collaboration platforms provide strong support for
+membership management, synchronization, file compatibility,
+and usability. However, these advantages are achieved through
+reliance on centralized infrastructure for storage,
+coordination, and access management.
+
+As a result, collaboration depends on the availability of a
+central service and its associated network connectivity.
+Although these platforms support basic version recovery, they
+generally provide limited facilities for long-term revision
+tracking and conflict management when compared with dedicated
+version control systems.
+
+Furthermore, ownership and control of shared data remain tied
+to the centralized platform. This model may be unsuitable for
+temporary collaborative groups seeking lightweight and
+serverless file sharing.
+
+\subsection{Limitations of Collaborative Version Control Systems}
+
+Collaborative version control systems provide strong support
+for revision tracking, rollback, and conflict resolution.
+These capabilities make them highly effective for managing the
+evolution of shared project artifacts over time.
+
+However, such systems are primarily designed for controlled
+revision management rather than transparent file
+synchronization. Changes are typically exchanged through
+explicit operations such as commits, pushes, pulls, or
+updates, requiring users to actively participate in the
+synchronization process.
+
+In addition, version control workflows often introduce a
+higher level of complexity than ordinary file sharing
+solutions. Repository management, branching, merging, and
+conflict resolution require specialized tools and technical
+knowledge that may be unnecessary for small temporary
+collaboration groups.
+
+Furthermore, support for large binary files and multimedia
+assets may be limited depending on the system being used. As a
+result, collaborative version control systems are well suited
+for managing project history but are less suitable as
+lightweight directory synchronization solutions.
 
 \subsection{Limitations of Existing Peer-to-Peer Solutions}
-\textit{TODO (team): add limits of existing P2P solutions.}
+
+Existing peer-to-peer approaches address different aspects of
+collaborative file management, but none provide comprehensive
+support across all evaluation dimensions.
+
+Collaborative version control systems such as
+\textit{Git}, \textit{SVN}, and \textit{Perforce} offer strong
+history management through version tracking, rollback, and
+conflict resolution. However, they rely on explicit workflows
+and are not designed for transparent directory
+synchronization.
+
+Conversely, peer-to-peer synchronization systems such as
+\textit{Syncthing} and \textit{Resilio Sync} provide automatic
+directory synchronization and strong filesystem integration.
+Nevertheless, their history management capabilities are
+typically limited to basic version retention and recovery
+mechanisms.
+
+Local sharing technologies such as \textit{AirDrop} and
+\textit{Nearby Share} further simplify file exchange, but they
+do not provide persistent synchronization, collaborative
+history management, or long-term shared workspaces.
+
+\subsection{Limitations of Local Sharing Technologies}
+
+Local sharing technologies simplify file exchange by enabling
+direct device-to-device transfers between nearby users.
+Systems such as \textit{AirDrop} and \textit{Nearby Share}
+provide convenient mechanisms for sharing files without
+requiring centralized infrastructure or complex setup.
+
+However, these technologies are designed primarily for
+one-time transfers rather than persistent collaboration. They
+do not maintain synchronized directories, automatically
+propagate subsequent modifications, or preserve revision
+history.
+
+In addition, sharing relationships are typically temporary and
+must be re-established whenever files are exchanged. As a
+result, local sharing technologies are highly effective for
+quick file transfers but do not provide the functionality
+required for ongoing collaborative file management.
 
 \subsection{The Gap}
-\textit{TODO (team): describe the gap.}
+
+The limitations discussed in the previous sections
+show that existing approaches provide different strengths for
+collaborative file management, but none fully satisfies the
+combination of requirements. 
+
+Table~\ref{tab:gap-summary} summarizes the performance of the
+reviewed approaches across the five evaluation dimensions
+introduced in Chapter~3: membership management,
+synchronization, history management, file support, and
+filesystem transparency and usability. The comparison shows
+that each category focuses on a particular subset of these
+dimensions.
+
+Centralized collaboration platforms provide strong support for
+membership management, synchronization, file support, and
+usability, but offer only limited history management.
+Collaborative version control systems provide comprehensive
+history management, but provide weaker support for
+synchronization, file support, and transparent filesystem
+integration. Peer-to-peer synchronization systems provide
+strong synchronization and usability, but only limited support
+for membership management and version recovery. Local sharing
+technologies simplify file exchange and provide strong
+usability, but do not support persistent synchronization or
+history management.
+
+Consequently, the gap identified in this study is not the
+absence of any individual capability. Rather, the gap is the
+absence of a lightweight solution that simultaneously provides
+strong support across all five evaluation dimensions.
+Existing systems typically optimize one aspect of
+collaborative file management at the expense of others.
+
+Therefore, there remains a need for a lightweight peer-to-peer
+directory synchronization system that combines decentralized
+collaboration, automatic synchronization, basic version
+recovery, support for heterogeneous project files, and
+transparent filesystem integration within a single solution.
+
+Local Sharing Technologies
+\begin{table}[htbp]
+\centering
+\footnotesize
+\caption{Gap Summary Across Evaluation Dimensions}
+\label{tab:gap-summary}
+
+\begin{tabular}{
+  C{2.8cm}
+  C{2.5cm}
+  C{2.8cm}
+  C{2.5cm}
+  C{2.5cm}
+  C{2.5cm}
+}
+\toprule
+
+\textbf{Approach}
+&
+\makecell{\textbf{Membership}\\\textbf{Management}}
+&
+\makecell{\textbf{Synchronization}}
+&
+\makecell{\textbf{History}\\\textbf{Management}}
+&
+\makecell{\textbf{File}\\\textbf{Support}}
+&
+\makecell{\textbf{Filesystem}\\\textbf{Transparency}\\\textbf{\& Usability}}
+
+\\
+
+  \midrule
+
+  Centralized Platforms
+  & \high
+  & \high
+  & \limited
+  & \high
+  & \high
+  \\
+
+  Version Control Systems
+  & \partialsupport
+  & \limited
+  & \high
+  & \partialsupport
+  & \limited
+  \\
+
+  P2P Synchronization Systems
+  & \partialsupport
+  & \high
+  & \limited
+  & \high
+  & \high
+  \\
+
+& \limited
+& \none
+& \none
+& \high
+& \high
+\\
+
+\midrule
+
+\textbf{Desired Solution}
+& \high
+& \high
+& \high
+& \high
+& \high
+\\
+
+\bottomrule
+\end{tabular}
+\end{table}
