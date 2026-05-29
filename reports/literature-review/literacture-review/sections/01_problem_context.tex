@@ -20,6 +20,17 @@ Therefore, the students require a lightweight and decentralized solution that en
 Based on the scenario described above, small-scale collaborative groups require a file-sharing mechanism that is lightweight, decentralized, and easy to use. In such environments, participants mainly care about whether they can quickly form a shared workspace, exchange project files reliably, preserve previous versions when changes are made, and continue working with the shared folder as if it were a normal local directory.\par
 From this objective, the problem can be defined as the design of a peer-to-peer directory-level synchronization system with lightweight version control. More specifically, the system must solve the following technical problems:
 
+% TODO: After finishing the later chapter, I feel that we need to adjust the following structure
+% The main dimention should be:
+% - Peer Discovery (Membership Management)
+% - Synchronization
+% - Version Recovery
+% - Transparent Filesystem Integration (UX important)
+% - File support
+% And we will have sub-goal for part of it:
+% - Rapid Propagation
+% - Large File Support
+% - Dynamic Membership
 \begin{itemize}
 \item \textbf{Local peer discovery and dynamic membership.}
 The system must discover available peers on the same local network without relying on a central server. It should also support dynamic participation, where peers may join, leave, or temporarily disconnect during collaboration.
