@@ -11,6 +11,12 @@ include(FetchContent)
 # Main executable - Linux only
 add_executable(cpp_daemon
     src/main.cpp
+    src/filesystem_watcher.cpp
+)
+
+# Include directories
+target_include_directories(cpp_daemon PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
 target_link_libraries(cpp_daemon PRIVATE
@@ -18,10 +24,6 @@ target_link_libraries(cpp_daemon PRIVATE
     pthread
 )
 
-# Include directories
-target_include_directories(cpp_daemon PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-)
 
 # Compiler warnings
 target_compile_options(cpp_daemon PRIVATE -Wall -Wextra -Wpedantic)
