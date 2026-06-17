@@ -25,7 +25,11 @@ temp/
 
 # Go
 **/bin/
-**/pkg/
+# Go build cache (not source pkg/ directories)
+**/pkg/mod/
+**/pkg/linux_*/
+**/pkg/darwin_*/
+**/pkg/windows_*/
 *.test
 *.out
 coverage.out
