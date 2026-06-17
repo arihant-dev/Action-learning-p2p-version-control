@@ -13,19 +13,8 @@ import (
 	"p2p/pkg/discovery"
 	"p2p/pkg/ipc"
 	"p2p/pkg/network"
+	"p2p/pkg/protocol"
 )
-
-type PeerInfo struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Address   string `json:"address"`
-	Port      int    `json:"port"`
-	Connected bool   `json:"connected"`
-}
-
-type PeerListPayload struct {
-	Peers []PeerInfo `json:"peers"`
-}
 
 func main() {
 	// Determine local peer ID (hostname)
@@ -145,10 +134,10 @@ func handleFileChanged(msg *ipc.Message, connMgr *network.ConnectionManager) err
 
 func sendPeerList(registry *discovery.PeerRegistry, connMgr *network.ConnectionManager, ipcServer *ipc.IpcServer) error {
 	peers := registry.GetPeers()
-	peerList := make([]PeerInfo, 0, len(peers))
+	peerList := make([]protocol.PeerInfo, 0, len(peers))
 
 	for _, p := range peers {
-		peerList = append(peerList, PeerInfo{
+		peerList = append(peerList, protocol.PeerInfo{
 			ID:        p.ID,
 			Name:      p.Name,
 			Address:   p.Address,
@@ -157,7 +146,7 @@ func sendPeerList(registry *discovery.PeerRegistry, connMgr *network.ConnectionM
 		})
 	}
 
-	payload, err := json.Marshal(PeerListPayload{Peers: peerList})
+	payload, err := json.Marshal(protocol.PeerListPayload{Peers: peerList})
 	if err != nil {
 		return fmt.Errorf("failed to marshal peer list payload: %v", err)
 	}
