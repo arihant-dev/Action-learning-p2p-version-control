@@ -1,0 +1,60 @@
+\chapter{System Architecture}
+
+This chapter describes the design adopted to achieve the objectives stated in the Introduction. The system splits work between two cooperating processes: a Go networking component and a C++ storage component, connected by IPC.
+
+\section{System Architecture Anticipated}
+\label{sec:arch-anticipated}
+
+\subsection{Components}
+
+The system has three main components:
+
+\begin{enumerate}
+    \item \textbf{Go Networking Daemon.} Handles peer discovery through mDNS/DNS-SD, manages TCP connections with peers, coordinates synchronization state, and runs an IPC server for communication with the storage daemon and the frontend.
+
+    \item \textbf{C++ Storage Daemon.} Handles local filesystem work: file watching (inotify/FSEvents), SHA-256 hashing with memory-mapped I/O, version backups before overwrites, and writing incoming files to disk.
+
+    \item \textbf{Java Frontend.} A graphical interface for monitoring sync status, browsing version history, and managing shared folders. It talks to the Go daemon through IPC.
+\end{enumerate}
+
+\subsection{Data Flow}
+
+A typical synchronization cycle works as follows:
+
+\begin{enumerate}
+    \item The C++ watcher detects a file change and computes the new SHA-256 hash.
+    \item It sends a metadata update (file path, hash, Lamport timestamp) to the Go daemon through IPC.
+    \item The Go daemon increments the file's Lamport counter and sends the update to connected peers.
+    \item Receiving peers compare the incoming timestamp against their local metadata.
+    \item If the incoming version is newer, the Go daemon requests a file transfer from the sender.
+    \item The file is sent over TCP directly to the C++ daemon on the receiving machine.
+    \item Before writing the new file, the C++ daemon saves the existing version in the \texttt{.versions/} directory.
+    \item The new file is written and the local metadata database is updated.
+\end{enumerate}
+
+\subsection{Metadata Storage}
+
+Each peer keeps a local SQLite database with:
+\begin{itemize}
+    \item File path (relative to the sync root)
+    \item SHA-256 content hash
+    \item Lamport timestamp
+    \item Last modification time (for display only)
+    \item File size in bytes
+\end{itemize}
+
+The schema is designed so it can be extended to support CRDTs later without breaking the existing protocol.
+
+\subsection{Communication Protocols}
+
+\begin{itemize}
+    \item \textbf{Discovery:} mDNS multicast on the local subnet (port 5353), advertising the \texttt{\_p2psync.\_tcp} service.
+    \item \textbf{Coordination:} Custom protocol over TCP for metadata exchange (file lists, version comparisons, transfer requests).
+    \item \textbf{File Transfer:} Direct TCP streaming between peers. The Go daemon sets up the connection and passes the socket to C++ for I/O.
+    \item \textbf{IPC:} Unix domain sockets between the Go and C++ daemons on the same machine.
+\end{itemize}
+
+\section{System Architecture Updated}
+\label{sec:arch-updated}
+
+\textit{This section will be completed at the end of Action Learning Week. It will document any changes to the architecture that came up during implementation, including modifications to the component structure, protocol changes, and lessons learned.}

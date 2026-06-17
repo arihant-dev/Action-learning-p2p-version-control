@@ -1,0 +1,299 @@
+\documentclass[11pt,oneside]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{cite}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{fancyhdr}
+\usepackage{lastpage}
+\usepackage{float}
+\usepackage{longtable}
+\usepackage{url}
+
+% Color definitions
+\definecolor{darkblue}{rgb}{0.0, 0.0, 0.5}
+\definecolor{lightgray}{rgb}{0.95, 0.95, 0.95}
+
+% Header and Footer
+\setlength{\headheight}{14.5pt}
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\textit{Action Learning P2P Directory Sync}}
+\rhead{\textit{Literature Review}}
+\cfoot{Page \thepage\ of \pageref{LastPage}}
+
+% Title setup
+\title{\Large \textbf{Literature Review: P2P File Synchronization System}\\
+        \normalsize Action Learning Project --- EPITA}
+\author{Arihant Jain (Backend Go) \and Su Huizhe (Backend C++) \and
+        Nizar Soufiya (Frontend) \and Shengkang Duan (Frontend + CI/CD)}
+\date{\today}
+
+% Custom column type for better table layout
+\newcolumntype{L}{>{\raggedright\arraybackslash}p{2.5cm}}
+\newcolumntype{Y}{>{\centering\arraybackslash}p{1.1cm}}
+\newcolumntype{N}{>{\centering\arraybackslash}p{2.0cm}}
+\newcolumntype{C}{>{\raggedright\arraybackslash}p{2.5cm}}
+\newcolumntype{D}{>{\raggedright\arraybackslash}p{3.1cm}}
+\newcolumntype{K}{>{\raggedright\arraybackslash}p{1.9cm}}
+\newcolumntype{U}{>{\raggedright\arraybackslash}p{2.1cm}}
+
+\begin{document}
+
+% Title page with logo
+\begin{titlepage}
+    \centering
+    \vspace*{2cm}
+    
+    % Logo
+    \includegraphics[width=0.3\textwidth]{../screenshots/others/Epita.jpg}\\
+    \vspace{1cm}
+    
+    % Title
+    \textbf{\LARGE Literature Review}\\
+    \textbf{\LARGE P2P File Synchronization System}\\
+    \vspace{0.5cm}
+    
+    % Subtitle
+    \textit{\Large Action Learning Project}\\
+    \vspace{2cm}
+    
+    % Team info
+    \large
+    \begin{tabular}{c}
+        \textbf{Backend (Go, C++)} \\
+        \vspace{0.1em} \\
+        Arihant Jain \\
+        Su Huizhe \\
+        \vspace{1em} \\
+        \textbf{Frontend and CI/CD (Java, GitHub Actions)} \\
+        \vspace{0.1em} \\
+        Nizar Soufiya \\
+        Shengkang Duan \\
+    \end{tabular}
+    
+    \vfill
+    \today
+\end{titlepage}
+
+\newpage
+\tableofcontents
+\newpage
+
+\section{Problem Context}
+
+\subsection{Scenario and Pain Points}
+\textit{TODO (team): add scenario and pain points.}
+
+\subsection{Problem Definition}
+\textit{TODO (team): add problem definition.}
+
+\section{Overview of Existing Work}
+\textit{TODO (team): summarize existing work and systems.}
+
+\section{Comparison of Approaches}
+We compare collaborative file synchronization tools by setup effort, server requirements, and capability to synchronize heterogeneous files across local meshes \cite{googledrive,dropbox,gitbook,github,syncthing,resilio}.
+
+\subsection{Evaluation of Existing Paradigms}
+\begin{enumerate}
+    \item \textbf{Cloud Directory Services} (e.g., Google Drive \cite{googledrive}, Dropbox \cite{dropbox}, Nextcloud): \\
+    These services rely on centralized cloud infrastructure. While they offer simple setup and ease of use, they suffer from high transfer latency, storage volume quotas, and strict dependency on external internet connectivity. Centralized hosting also raises user data privacy concerns and imposes access permissions that create collaboration bottlenecks for temporary teams.
+    
+    \item \textbf{Version Control Systems} (e.g., Git \cite{gitbook, github}, SVN): \\
+    VCS tools track repository history using directed acyclic graphs (DAGs). Although they provide powerful conflict resolution, change logs, and branch-level safety, they are designed for text-based source code. They do not handle large binary files well and require users to manually run staging, committing, and remote push/pull cycles. This workflow introduces steep learning curves for non-technical team members.
+    
+    \item \textbf{P2P File Synchronization} (e.g., Syncthing \cite{syncthing}, Resilio Sync \cite{resilio}): \\
+    Decentralized sync programs mirror directories directly between devices without central servers, avoiding cloud storage quotas and allowing high-speed local transfers. However, they lack integrated version rollback histories, making accidental file overwrites difficult to undo. Setup also requires manual node sharing and folder approvals, which adds configuration friction for short-term projects.
+\end{enumerate}
+
+\subsection{Key Product Differences: Syncthing vs. Resilio Sync}
+We analyze the differences between the leading peer-to-peer synchronization tools to clarify our design choices:
+\begin{itemize}
+    \item \textbf{Architecture and Openness:} Syncthing is open-source and uses the public Block Exchange Protocol (BEP). It enforces a strict security model where devices must exchange long cryptographic IDs and mutually approve folder invitations. Resilio Sync is proprietary, based on the BitTorrent protocol, and supports selective sync, but has commercial license limits and proprietary lock-in.
+    \item \textbf{Lightweight Collaboration Gap:} Both tools act as generic directory mirrors rather than project-specific workspaces. They lack automated, non-destructive version histories that team members can navigate easily. If a peer saves a broken draft, that file immediately overwrites the state of all other online peers, requiring complex administrative configuration to recover.
+\end{itemize}
+
+\subsection{Proposed P2P Synchronization System}
+To address these limitations, we propose a serverless local directory synchronization system. It combines the direct transfer speed of P2P mirroring with the version safety of a lightweight revision tool. The proposed system features:
+\begin{itemize}
+    \item \textbf{Zero Configuration (planned):} Peer discovery relies on Multicast DNS (mDNS) \cite{rfc6762} and DNS-SD \cite{rfc6763} broadcasts on the local subnet, forming a sync mesh without manual IP or node ID exchange.
+    \item \textbf{Local Socket Transfer (planned):} TCP connections \cite{rfc9293} handle data replication directly between peers over the local network, avoiding external server roundtrips.
+    \item \textbf{Autonomous Coordination (planned):} Every node acts as an independent repository coordinator, allowing concurrent edits that propagate without administrative approval bottlenecks.
+    \item \textbf{Durability and Recovery (planned):} We combine a Last-Write-Wins (LWW) conflict policy with automated local backups before any overwrite. This avoids the implementation complexity of vector clocks or CRDTs for small-scale student teams (3–5 peers).
+\end{itemize}
+
+\subsection{Core Project Hypotheses}
+We formulate the following testable scientific hypotheses to guide the evaluation of our proposed system:
+\begin{itemize}
+    \item \textbf{Primary Hypothesis ($H_1$):} A localized, serverless synchronization architecture using mDNS/DNS-SD discovery and direct TCP socket replication can achieve sub-second average synchronization latency on standard local area networks (WLAN) without reliance on external cloud infrastructure.
+    \item \textbf{Secondary Hypothesis ($H_2$):} Utilizing a single logical timestamp (Lamport clock) counter per file, paired with a deterministic Last-Write-Wins (LWW) resolution rule and local file backups, provides sufficient consistency and rollback recovery for small-scale collaborative teams (3-5 peers) while avoiding the state and computational overhead of vector clocks or CRDTs.
+\end{itemize}
+
+\subsection{Structured Comparison Table}
+Table \ref{tab:comparison} evaluates the feature tradeoffs of the three paradigms.
+
+\begin{longtable}{>{\raggedright\arraybackslash}p{3.2cm} >{\raggedright\arraybackslash}p{3.8cm} >{\raggedright\arraybackslash}p{3.8cm} >{\raggedright\arraybackslash}p{3.8cm}}
+\caption{Comparison of Collaborative File Sharing and Synchronization Approaches} \label{tab:comparison} \\
+\toprule
+\textbf{Feature / Dimension} & \textbf{Cloud Directory Services} & \textbf{Version Control Systems} & \textbf{P2P File Sync (Proposed)} \\
+\midrule
+\endfirsthead
+\multicolumn{4}{c}{{\bfseries Table \thetable\ -- Continued from previous page}} \\
+\midrule
+\textbf{Feature / Dimension} & \textbf{Cloud Directory Services} & \textbf{Version Control Systems} & \textbf{P2P File Sync (Proposed)} \\
+\midrule
+\endhead
+\midrule
+\multicolumn{4}{r}{{Continued on next page}} \\
+\endfoot
+\bottomrule
+\endlastfoot
+Primary Topology & Centralized Client-Server & Distributed (DAG-based) & Peer-to-Peer (Mesh) \\
+\midrule
+Network Discovery & Centralized cloud portal & Remote repository server & Local mDNS / LAN broadcast \\
+\midrule
+Setup Complexity & Account setup & Repository creation / auth & Low (auto-discovery planned) \\
+\midrule
+Target Use Case & Generic office documents & Source code tracking & Live directory mirroring \\
+\midrule
+Conflict Resolution & Duplicate file generation & Manual merges / diff resolution & LWW (planned) \\
+\midrule
+Version Control & Periodic file revisions & Explicit commits and branches & Local backups (planned) \\
+\midrule
+File Watcher & Periodic polling & Manual staging & Kernel events (planned) \\
+\midrule
+Bandwidth Efficiency & Server upload/download & Incremental compression diffs & Direct sockets / planned delta sync \\
+\midrule
+Internet Dependency & High (cloud servers required) & High (for pull/push) & None (offline-capable) \\
+\midrule
+Data Privacy & Low (third-party storage) & Medium (third-party servers) & High (local-only storage) \\
+\midrule
+Access Permissions & Centralized ACL approvals & Branch rules and PR reviews & Peer-to-peer access \\
+\end{longtable}
+
+\section{Identified Gap}
+
+\subsection{Limitations of Centralized Solutions}
+\textit{TODO (team): add limits of centralized solutions.}
+
+\subsection{Limitations of Existing Peer-to-Peer Solutions}
+\textit{TODO (team): add limits of existing P2P solutions.}
+
+\subsection{The Gap}
+\textit{TODO (team): describe the gap.}
+
+\section{Positioning Your Project}
+
+\subsection{Key Differentiators}
+\textit{TODO (team): add key differentiators.}
+
+\subsection{Design Philosophy}
+\textit{TODO (team): add design philosophy.}
+
+\section{Research to Application Mapping}
+
+To translate academic theories into our proposed architecture, we map eight core research insights to planned components in our Go/C++ design:
+
+\begin{enumerate}
+    \item \textbf{Zero-Configuration Peer Discovery on LAN}
+    \begin{itemize}
+        \item \textbf{Research Insight:} Cheshire and Krochmal \cite{rfc6762, rfc6763} establish that Multicast DNS (mDNS) and DNS-Based Service Discovery (DNS-SD) enable serverless local service registration and resolution using standard IP multicast queries.
+        \item \textbf{Application in Project:} We plan a Go-based peer discovery component that broadcasts service records under the \texttt{\_p2psync.\_tcp} domain and dynamically browses the local subnet to resolve peer addresses, removing the need for manual configuration.
+    \end{itemize}
+
+    \item \textbf{Causal Ordering of Concurrent Updates}
+    \begin{itemize}
+        \item \textbf{Research Insight:} Lamport \cite{lamport1978} demonstrates that logical clocks and causal relation tracking can order events in a distributed system without relying on synchronized physical clocks.
+        \item \textbf{Application in Project:} We plan to attach per-file logical timestamps (Lamport clocks) to track change sequences and detect concurrent modifications, avoiding the state and coordination overhead of vector clocks for the initial release.
+    \end{itemize}
+
+    \item \textbf{Consistency Strategies under Network Partitions}
+    \begin{itemize}
+        \item \textbf{Research Insight:} Gilbert and Lynch's proof of the CAP Theorem \cite{brewer2002} establishes that distributed systems must trade consistency for availability during network partitions.
+        \item \textbf{Application in Project:} We choose availability by allowing peers to make local modifications offline. When connection is restored, a resync process runs to resolve conflicts and converge on a common state.
+    \end{itemize}
+
+    \item \textbf{Conflict Handling and Durability}
+    \begin{itemize}
+        \item \textbf{Research Insight:} Replicated storage systems like Bayou \cite{bayou1995} demonstrate that resolving conflicts requires deterministic policies paired with non-destructive version backups to ensure data durability.
+        \item \textbf{Application in Project:} We plan to use a Last-Write-Wins (LWW) policy based on logical timestamps. Before overwriting a local file, we plan to store a backup copy to protect against data loss.
+    \end{itemize}
+
+    \item \textbf{Conflict-Free Convergence Evolution}
+    \begin{itemize}
+        \item \textbf{Research Insight:} Shapiro et al. \cite{shapiro2011} prove that Conflict-Free Replicated Data Types (CRDTs) allow concurrent updates to merge automatically and converge mathematically.
+        \item \textbf{Application in Project:} We plan to use LWW for the initial release to reduce complexity, but construct our SQLite metadata schema and Go coordination logic to support state-based CRDTs in future versions.
+    \end{itemize}
+
+    \item \textbf{Bandwidth-Efficient Synchronization}
+    \begin{itemize}
+        \item \textbf{Research Insight:} Tridgell and Mackerras \cite{rsync1996} show that rolling checksums allow remote directories to synchronize by transferring only modified blocks instead of entire files.
+        \item \textbf{Application in Project:} We plan to start with whole-file transfers for simplicity. In a later optimization phase, we will add block-level diffing to minimize local WLAN bandwidth use.
+    \end{itemize}
+
+    \item \textbf{Kernel-Level File Watching}
+    \begin{itemize}
+        \item \textbf{Research Insight:} Operating system event APIs like Linux's inotify \cite{inotify7} and macOS's FSEvents \cite{fsevents} provide kernel-level event streams for file additions, modifications, and deletions without the overhead of periodic polling.
+        \item \textbf{Application in Project:} We plan a C++ file watcher daemon that uses native OS APIs (inotify and FSEvents) to detect directory events with minimal CPU overhead, notifying the Go coordination engine via IPC.
+    \end{itemize}
+
+    \item \textbf{Data Integrity and Reliable Transport}
+    \begin{itemize}
+        \item \textbf{Research Insight:} Cryptographic hashing standard SHA-256 \cite{fips1804} provides unique content identifiers that verify data integrity, while the Transmission Control Protocol (TCP) \cite{rfc9293} guarantees reliable, ordered packet delivery.
+        \item \textbf{Application in Project:} We plan to let the C++ daemon hash local files for change verification, and let the Go network coordinator transfer files over TCP sockets to ensure error-free replication.
+    \end{itemize}
+\end{enumerate}
+
+\section{Key References}
+
+The following six publications serve as the primary theoretical and technical foundation for our proposed system's architecture and design choices.
+
+\begin{enumerate}
+    \item \textbf{RFC 6762 \& RFC 6763 (Stuart Cheshire and Marc Krochmal, 2013)} \cite{rfc6762, rfc6763} \\
+    These specifications define Multicast DNS (mDNS) and DNS-Based Service Discovery (DNS-SD), which form the basis for zero-configuration networking. They demonstrate how local devices can advertise and resolve services without a centralized DNS server. We use these protocols to plan our Go-based peer discovery component, allowing team members on the same local network to connect automatically and sync directories without manual setup.
+
+    \item \textbf{Leslie Lamport (1978) - ``Time, Clocks, and the Ordering of Events in a Distributed System''} \cite{lamport1978} \\
+    This paper introduces logical clocks to track event ordering and causality in distributed systems where physical clocks cannot be synchronized. It provides the foundation for our synchronization logic. We plan to attach a single logical timestamp counter to each file metadata entry. This enables our Go coordinator to detect concurrent modifications and resolve update sequencing chronologically without the complexity of full vector clocks.
+
+    \item \textbf{Seth Gilbert and Nancy Lynch (2002) - ``Brewer's Conjecture and the Feasibility of Consistent, Available, Partition-Tolerant Web Services''} \cite{brewer2002} \\
+    This work provides the formal proof of the CAP Theorem, showing that a distributed system cannot guarantee consistency, availability, and partition tolerance simultaneously. This theorem guides our architectural choice to prioritize availability. We allow peers to edit files locally while offline and reconcile changes eventually upon reconnection, which fits the dynamic connection cycles of student teams.
+
+    \item \textbf{Marc Shapiro et al. (2011) - ``A Comprehensive Study of Convergent and Commutative Replicated Data Types''} \cite{shapiro2011} \\
+    This research report analyzes CRDTs, demonstrating how data structures can achieve eventual consistency mathematically without consensus protocols. While we adopt a simpler Last-Write-Wins policy for our initial release to reduce complexity, this study serves as our design roadmap, ensuring our SQLite schema and Go metadata models can support state-based CRDTs in future iterations.
+
+    \item \textbf{Andrew Tridgell and Paul Mackerras (1996) - ``The Rsync Algorithm''} \cite{rsync1996} \\
+    This paper presents a rolling-checksum algorithm that synchronizes directories by transferring only modified file blocks. It forms the basis of our planned bandwidth optimization. In our design, we begin with whole-file transfer pipelines, and plan to integrate this block-level delta sync in a later phase to optimize local WLAN usage for large binary assets.
+
+    \item \textbf{Karin Petersen et al. (1995) - ``Managing Update Conflicts in Bayou, a Weakly Connected Replicated Storage System''} \cite{bayou1995} \\
+    This paper explores conflict management and reconciliation in weakly connected replicated storage systems. It introduces conflict detection and resolution policies, informing our decision to combine an automated Last-Write-Wins (LWW) resolution rule with local backup preservation. This ensures predictable reconciliation while keeping older file versions accessible to prevent accidental data loss.
+\end{enumerate}
+
+\section{Conclusion}
+
+\subsection{Literature Review Synthesis}
+Our analysis of distributed systems literature highlights that building a serverless, local directory sync tool requires combining data-integrity algorithms with network and clock synchronization standards. mDNS and DNS-SD \cite{rfc6762, rfc6763} remove the need for central registry servers, while logical clocks \cite{lamport1978} establish event ordering in decentralized networks. Because partitions are expected on local subnets, the CAP Theorem \cite{brewer2002} suggests prioritizing availability and eventual convergence. Deterministic resolution policies combined with version backups \cite{bayou1995} provide a safe conflict-handling baseline, with CRDTs \cite{shapiro2011} offering a path toward automatic conflict-free convergence.
+
+\subsection{Influence on Design}
+The literature shapes our proposed Go/C++ architecture:
+\begin{itemize}
+    \item We plan to use mDNS/DNS-SD (via Go) to automate local network peer discovery, removing setup friction.
+    \item We plan to use logical timestamps (Lamport clocks) and a Last-Write-Wins conflict resolution policy to manage concurrent edits predictably.
+    \item We plan to favor local availability, ensuring users can work offline and sync differences upon reconnection.
+    \item We plan a split where Go handles network coordination and C++ handles OS-level file watching (inotify \cite{inotify7}, FSEvents \cite{fsevents}) and hashing (SHA-256 \cite{fips1804}) over reliable TCP sockets \cite{rfc9293}.
+\end{itemize}
+
+\subsection{Limitations and Future Work}
+While our current design provides a synchronization baseline, we recognize limitations in bandwidth usage and conflict handling. Whole-file transfers are simple to implement but inefficient for large assets. Our next steps are:
+\begin{itemize}
+    \item Implement the Go-to-C++ socket handover pipeline to connect the network and storage layers.
+    \item Implement the rsync-style rolling checksum algorithm \cite{rsync1996} in C++ to enable delta transfers.
+    \item Introduce state-based CRDT schemas \cite{shapiro2011} in Go to support automatic, conflict-free metadata merging.
+\end{itemize}
+
+\newpage
+\bibliographystyle{IEEEtran}
+\bibliography{literature-review}
+
+\end{document}

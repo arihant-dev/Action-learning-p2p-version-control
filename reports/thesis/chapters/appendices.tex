@@ -1,0 +1,247 @@
+\begin{appendices}
+
+\chapter{Detailed Comparison Tables}
+\label{app:comparison-tables}
+
+The following tables provide a detailed, dimension-by-dimension comparison of existing collaborative file management approaches. They supplement the analysis presented in Chapter~2 by providing granular ratings for individual systems within each category.
+
+The qualitative ratings used are defined in Table~\ref{tab:rating-scale-app}.
+
+\begin{table}[htbp]
+\centering
+\caption{Qualitative Rating Scale}
+\label{tab:rating-scale-app}
+\begin{tabular}{cc}
+\toprule
+\textbf{Rating} & \textbf{Meaning} \\
+\midrule
+\high & Strong support for the capability \\
+\partialsupport & Partial support with notable limitations \\
+\limited & Basic or restricted support \\
+\none & Capability not provided \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ---------- Membership Management ----------
+\begin{table}[htbp]
+\centering
+\caption{Comparison: Membership Management}
+\label{tab:app-membership}
+\begin{tabular}{
+C{2.3cm}
+C{2.3cm}
+C{3.2cm}
+C{3.2cm}
+C{3.2cm}
+}
+\toprule
+\textbf{Category} & \textbf{System} & \makecell{\textbf{Peer}\\\textbf{Discovery}} & \makecell{\textbf{Access}\\\textbf{Control}} & \makecell{\textbf{Group}\\\textbf{Formation}} \\
+\midrule
+\multirow{4}{*}{Centralized}
+& \textit{Google Drive}  & \limited & \high & \high \\
+& \textit{OneDrive}      & \limited & \high & \high \\
+& \textit{Dropbox}       & \limited & \high & \high \\
+& \textit{Nextcloud}     & \limited & \high & \partialsupport \\
+\midrule
+\multirow{3}{*}{Version Control}
+& \textit{Git}       & \none & \none & \limited \\
+& \textit{SVN}       & \none & \high & \limited \\
+& \textit{Perforce}  & \none & \high & \limited \\
+\midrule
+\multirow{2}{*}{P2P Sync}
+& \textit{Syncthing}     & \high & \partialsupport & \partialsupport \\
+& \textit{Resilio Sync}  & \partialsupport & \partialsupport & \partialsupport \\
+\midrule
+\multirow{2}{*}{Local Sharing}
+& \textit{AirDrop}       & \high & \none & \limited \\
+& \textit{Nearby Share}  & \high & \none & \limited \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ---------- Synchronization Model ----------
+\begin{table}[htbp]
+\centering
+\caption{Comparison: Synchronization Model}
+\label{tab:app-sync}
+\begin{tabular}{
+C{2.3cm}
+C{2.3cm}
+C{3.2cm}
+C{3.2cm}
+C{3.2cm}
+}
+\toprule
+\textbf{Category} & \textbf{System} & \makecell{\textbf{Automatic}\\\textbf{Sync}} & \makecell{\textbf{Offline}\\\textbf{Operation}} & \makecell{\textbf{Multi-Device}\\\textbf{Sync}} \\
+\midrule
+\multirow{4}{*}{Centralized}
+& \textit{Google Drive}  & \high & \limited & \high \\
+& \textit{OneDrive}      & \high & \limited & \high \\
+& \textit{Dropbox}       & \high & \limited & \high \\
+& \textit{Nextcloud}     & \high & \partialsupport & \high \\
+\midrule
+\multirow{3}{*}{Version Control}
+& \textit{Git}       & \none & \high & \partialsupport \\
+& \textit{SVN}       & \none & \limited & \partialsupport \\
+& \textit{Perforce}  & \none & \limited & \partialsupport \\
+\midrule
+\multirow{2}{*}{P2P Sync}
+& \textit{Syncthing}     & \high & \high & \high \\
+& \textit{Resilio Sync}  & \high & \high & \high \\
+\midrule
+\multirow{2}{*}{Local Sharing}
+& \textit{AirDrop}       & \none & \none & \none \\
+& \textit{Nearby Share}  & \none & \none & \none \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ---------- History Management ----------
+\begin{table}[htbp]
+\centering
+\caption{Comparison: History Management}
+\label{tab:app-history}
+\begin{tabular}{
+C{2.3cm}
+C{2.3cm}
+C{3.2cm}
+C{3.2cm}
+C{3.2cm}
+}
+\toprule
+\textbf{Category} & \textbf{System} & \makecell{\textbf{Version}\\\textbf{History}} & \makecell{\textbf{Rollback}} & \makecell{\textbf{Conflict}\\\textbf{Resolution}} \\
+\midrule
+\multirow{4}{*}{Centralized}
+& \textit{Google Drive}  & \limited & \limited & \limited \\
+& \textit{OneDrive}      & \limited & \limited & \limited \\
+& \textit{Dropbox}       & \limited & \limited & \limited \\
+& \textit{Nextcloud}     & \partialsupport & \partialsupport & \limited \\
+\midrule
+\multirow{3}{*}{Version Control}
+& \textit{Git}       & \high & \high & \high \\
+& \textit{SVN}       & \high & \high & \high \\
+& \textit{Perforce}  & \high & \high & \high \\
+\midrule
+\multirow{2}{*}{P2P Sync}
+& \textit{Syncthing}     & \partialsupport & \partialsupport & \limited \\
+& \textit{Resilio Sync}  & \partialsupport & \partialsupport & \limited \\
+\midrule
+\multirow{2}{*}{Local Sharing}
+& \textit{AirDrop}       & \none & \none & \none \\
+& \textit{Nearby Share}  & \none & \none & \none \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ---------- File Support ----------
+\begin{table}[htbp]
+\centering
+\caption{Comparison: File Support}
+\label{tab:app-file}
+\begin{tabular}{
+C{2.3cm}
+C{2.3cm}
+C{3.2cm}
+C{3.2cm}
+}
+\toprule
+\textbf{Category} & \textbf{System} & \makecell{\textbf{Heterogeneous}\\\textbf{Files}} & \makecell{\textbf{Large}\\\textbf{Files}} \\
+\midrule
+\multirow{4}{*}{Centralized}
+& \textit{Google Drive}  & \high & \partialsupport \\
+& \textit{OneDrive}      & \high & \partialsupport \\
+& \textit{Dropbox}       & \high & \partialsupport \\
+& \textit{Nextcloud}     & \high & \high \\
+\midrule
+\multirow{3}{*}{Version Control}
+& \textit{Git}       & \partialsupport & \limited \\
+& \textit{SVN}       & \partialsupport & \partialsupport \\
+& \textit{Perforce}  & \high & \high \\
+\midrule
+\multirow{2}{*}{P2P Sync}
+& \textit{Syncthing}     & \high & \high \\
+& \textit{Resilio Sync}  & \high & \high \\
+\midrule
+\multirow{2}{*}{Local Sharing}
+& \textit{AirDrop}       & \high & \high \\
+& \textit{Nearby Share}  & \high & \high \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ---------- Usability ----------
+\begin{table}[htbp]
+\centering
+\caption{Comparison: Filesystem Transparency and Usability}
+\label{tab:app-usability}
+\begin{tabular}{
+C{2.3cm}
+C{2.3cm}
+C{3.2cm}
+C{3.2cm}
+}
+\toprule
+\textbf{Category} & \textbf{System} & \makecell{\textbf{Filesystem}\\\textbf{Integration}} & \makecell{\textbf{Ease}\\\textbf{of Use}} \\
+\midrule
+\multirow{4}{*}{Centralized}
+& \textit{Google Drive}  & \high & \high \\
+& \textit{OneDrive}      & \high & \high \\
+& \textit{Dropbox}       & \high & \high \\
+& \textit{Nextcloud}     & \high & \partialsupport \\
+\midrule
+\multirow{3}{*}{Version Control}
+& \textit{Git}       & \limited & \limited \\
+& \textit{SVN}       & \limited & \limited \\
+& \textit{Perforce}  & \limited & \limited \\
+\midrule
+\multirow{2}{*}{P2P Sync}
+& \textit{Syncthing}     & \high & \high \\
+& \textit{Resilio Sync}  & \high & \high \\
+\midrule
+\multirow{2}{*}{Local Sharing}
+& \textit{AirDrop}       & \high & \high \\
+& \textit{Nearby Share}  & \high & \high \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ---------- Gap Summary ----------
+\begin{table}[htbp]
+\centering
+\footnotesize
+\caption{Gap Summary Across Evaluation Dimensions}
+\label{tab:app-gap-summary}
+\begin{tabular}{
+  C{2.8cm}
+  C{2.5cm}
+  C{2.8cm}
+  C{2.5cm}
+  C{2.5cm}
+  C{2.5cm}
+}
+\toprule
+\textbf{Approach}
+& \makecell{\textbf{Membership}\\\textbf{Management}}
+& \makecell{\textbf{Sync}}
+& \makecell{\textbf{History}\\\textbf{Management}}
+& \makecell{\textbf{File}\\\textbf{Support}}
+& \makecell{\textbf{Filesystem}\\\textbf{Transparency}} \\
+\midrule
+Centralized Platforms  & \high & \high & \limited & \high & \high \\
+Version Control Systems & \partialsupport & \limited & \high & \partialsupport & \limited \\
+P2P Sync Systems & \partialsupport & \high & \limited & \high & \high \\
+Local Sharing & \limited & \none & \none & \high & \high \\
+\midrule
+\textbf{Desired Solution} & \high & \high & \high & \high & \high \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\chapter{List of Figures}
+\listoffigures
+
+\chapter{List of Tables}
+\listoftables
+
+\end{appendices}

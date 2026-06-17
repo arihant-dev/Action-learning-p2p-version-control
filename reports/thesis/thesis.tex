@@ -1,0 +1,162 @@
+\documentclass[12pt,oneside]{report}
+
+% =============================================================================
+% PACKAGES
+% =============================================================================
+\usepackage[a4paper, margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage[hidelinks]{hyperref}
+\usepackage{apacite}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage[table]{xcolor}
+\usepackage{fancyhdr}
+\usepackage{lastpage}
+\usepackage{float}
+\usepackage{longtable}
+\usepackage{url}
+\usepackage{multirow}
+\usepackage{makecell}
+\usepackage{setspace}
+\usepackage{titlesec}
+\usepackage[toc,page]{appendix}
+\usepackage{mathptmx}                 % Times New Roman font
+
+% =============================================================================
+% DOCUMENT SETTINGS
+% =============================================================================
+
+% Double spacing as required by template
+\doublespacing
+
+% Color definitions
+\definecolor{darkblue}{rgb}{0.0, 0.0, 0.5}
+\definecolor{lightgray}{rgb}{0.95, 0.95, 0.95}
+
+% Custom column types
+\newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
+
+% Colour-coded rating commands (for comparison tables)
+\newcommand{\high}{\cellcolor{green!25}High}
+\newcommand{\partialsupport}{\cellcolor{yellow!25}Partial}
+\newcommand{\limited}{\cellcolor{orange!25}Limited}
+\newcommand{\none}{\cellcolor{gray!25}None}
+
+% Header and Footer
+\setlength{\headheight}{14.5pt}
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\textit{P2P Directory Synchronization}}
+\rhead{\textit{Thesis}}
+\cfoot{Page \thepage\ of \pageref{LastPage}}
+
+% Chapter title style
+\titleformat{\chapter}[display]
+  {\normalfont\huge\bfseries}
+  {\chaptertitlename\ \thechapter}{20pt}{\Huge}
+\titlespacing*{\chapter}{0pt}{-20pt}{30pt}
+
+% =============================================================================
+% DOCUMENT
+% =============================================================================
+\begin{document}
+
+% ---- Title Page ----
+\begin{titlepage}
+    \centering
+    \vspace*{2cm}
+
+    % Logo
+    \includegraphics[width=0.3\textwidth]{../screenshots/others/Epita.jpg}\\
+    \vspace{1cm}
+
+    % Title
+    {\LARGE \textbf{Peer-to-Peer Directory Synchronization\\with Lightweight Version Control}}\\
+    \vspace{1cm}
+
+    % Team
+    \large
+    \begin{tabular}{c}
+        Arihant Jain \\
+        Su Huizhe \\
+        Nizar Soufiya \\
+        Shengkang Duan \\
+    \end{tabular}
+
+    \vspace{1.5cm}
+
+    EPITA Graduate School of Computer Science\\
+    \vspace{1cm}
+
+    \textbf{Advisor}\\
+    \textit{[Put name here]}\\
+
+    \vfill
+    \today
+\end{titlepage}
+
+% ---- Declaration of Own Work ----
+\newpage
+\thispagestyle{empty}
+\chapter*{Declaration of Own Work}
+\addcontentsline{toc}{chapter}{Declaration of Own Work}
+
+\textit{To be signed in the presence of your Advisor or EPITA staff delegate.}
+
+\vspace{1cm}
+
+This work has been composed solely by us.
+
+This work has not been accepted in any previous application for a degree or diploma.
+
+The work of which this is a record has been wholly done by us.
+
+All extracts, including those created by generative AI, have been distinguished by quotation marks and the sources of our information have been specifically acknowledged and documented with in-text citations and in the bibliography.
+
+\vspace{2cm}
+
+\begin{tabular}{p{6cm} p{6cm}}
+Date: \underline{\hspace{4cm}} & \\[1.5cm]
+Name: \underline{\hspace{4cm}} & Signature: \underline{\hspace{4cm}} \\[1cm]
+Name: \underline{\hspace{4cm}} & Signature: \underline{\hspace{4cm}} \\[1cm]
+Name: \underline{\hspace{4cm}} & Signature: \underline{\hspace{4cm}} \\[1cm]
+Name: \underline{\hspace{4cm}} & Signature: \underline{\hspace{4cm}} \\
+\end{tabular}
+
+% ---- Acknowledgements ----
+\newpage
+\chapter*{Acknowledgements}
+\addcontentsline{toc}{chapter}{Acknowledgements}
+
+\textit{Write your acknowledgements here.}
+
+% ---- Abstract / Executive Summary ----
+\newpage
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+
+\textit{The abstract goes here. It should be self-contained and clearly state the problem dealt with by the thesis. Give a brief description of the proposed solution. This section should be more about the problem than the solution. It is recommended to write this section at the same time as the conclusion.}
+
+% ---- Table of Contents ----
+\newpage
+\tableofcontents
+\newpage
+
+% ---- Chapters ----
+\input{chapters/01_introduction}
+\input{chapters/02_literature_review}
+\input{chapters/03_state_of_the_art}
+\input{chapters/04_system_architecture}
+\input{chapters/05_methodology}
+\input{chapters/06_results}
+\input{chapters/07_conclusions}
+
+% ---- Bibliography ----
+\newpage
+\bibliographystyle{apacite}
+\bibliography{thesis}
+
+% ---- Appendices ----
+\input{chapters/appendices}
+
+\end{document}

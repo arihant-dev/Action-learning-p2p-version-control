@@ -1,0 +1,28 @@
+\chapter{Conclusions}
+
+This thesis addressed the problem of file synchronization for small collaborative teams that need something simpler than Git but safer than basic file mirroring.
+
+We identified a gap in existing tools. Centralized services need external infrastructure and accounts. Version control systems require technical knowledge and manual workflows. Peer-to-peer sync tools lack version safety. No existing tool combines automatic local-network synchronization with built-in version backups and zero configuration.
+
+Our system fills this gap with a two-process architecture. The Go networking daemon handles peer discovery (mDNS/DNS-SD), synchronization coordination (Lamport clocks with LWW conflict resolution), and TCP file transfer. The C++ storage daemon handles file watching, hashing, backups, and disk I/O. Together, they provide a shared directory that behaves like a normal folder while synchronizing across peers on the same network.
+
+The design makes trade-offs that fit our target use case:
+
+\begin{itemize}
+    \item Lamport clocks instead of vector clocks: simpler but cannot detect truly concurrent edits.
+    \item Last-Write-Wins instead of CRDTs: simpler but one version is discarded (with backup).
+    \item Whole-file transfers instead of delta sync: simpler but uses more bandwidth.
+\end{itemize}
+
+These choices work for 3 to 5 peers on a local network. Scaling further would require revisiting them.
+
+Future work includes:
+
+\begin{itemize}
+    \item Block-level delta synchronization using the rsync rolling-checksum algorithm to reduce bandwidth for large files.
+    \item CRDT-based metadata merging to allow conflict-free convergence without LWW.
+    \item Cross-subnet discovery for peers on different networks.
+    \item Mobile platform support, where filesystem access and background execution work differently.
+\end{itemize}
+
+The project shows that a simple, serverless synchronization tool is feasible by combining well-understood protocols (mDNS, TCP, SHA-256) with a practical conflict resolution approach (LWW with backups).

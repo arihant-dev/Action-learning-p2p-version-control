@@ -1,0 +1,82 @@
+\chapter{State of the Art}
+
+This chapter describes the state of the art from the research we conducted for this project. It covers the technical decisions we made for technology, architecture, and synchronization design, with citations for each choice. Each section maps a research finding to a component in our system and explains why we chose one approach over the alternatives.
+
+\section{Zero-Configuration Peer Discovery}
+
+We chose Multicast DNS (mDNS) and DNS-Based Service Discovery (DNS-SD) \cite{rfc6762, rfc6763} for peer discovery. These protocols let devices on a local network advertise and find services using standard IP multicast, without a central DNS server or manual setup.
+
+Our Go discovery component broadcasts service records under the \texttt{\_p2psync.\_tcp} domain and scans the subnet for peer addresses. Users do not need to exchange IP addresses, device IDs, or invitation codes. This removes a source of friction we observed in Syncthing's setup process \cite{syncthing}.
+
+One limitation: mDNS relies on multicast, which some enterprise networks filter. For our target use case (students on campus Wi-Fi), this is acceptable. Supporting more restricted networks would require a relay server, which would reintroduce the server dependency we are trying to avoid.
+
+\section{Event Ordering and Logical Clocks}
+
+Lamport \citeyear{lamport1978} showed that logical clocks can order events in a distributed system without synchronized physical clocks. Each process keeps a counter, increments it on events, and attaches it to messages. If event $A$ caused event $B$, $A$'s timestamp is lower than $B$'s.
+
+We attach a single Lamport counter to each file's metadata. When a peer changes a file, it increments the counter and sends the update. Receiving peers compare timestamps to decide if the incoming version is newer.
+
+The known limitation is that Lamport clocks cannot detect concurrent edits (two peers changing the same file at the same time with no connection between them). Fidge \citeyear{fidge1988} proposed vector clocks to solve this, but they grow with the number of peers and add protocol complexity. For 3 to 5 peers, we judged the overhead unnecessary. We use Lamport ordering with a Last-Write-Wins tiebreaker and local backups before every overwrite, following the approach documented in the Bayou system \cite{bayou1995}.
+
+\section{Consistency Model and Partition Tolerance}
+
+The CAP theorem \cite{brewer2002} proves that during a network partition, a distributed system must choose between consistency and availability. Student laptops go to sleep, disconnect, and leave the room. Blocking edits until all peers are reachable would make the tool useless.
+
+We chose availability: peers edit freely while offline, and differences are reconciled when connectivity returns. Vogels \citeyear{vogels2009} calls this ``eventually consistent'' and argues it fits systems where temporary staleness is acceptable. Our backup mechanism ensures that even if reconciliation overwrites a file, no data is permanently lost.
+
+\section{Conflict Resolution and Data Durability}
+
+We chose LWW for the initial release, following Bayou \cite{bayou1995}. The key idea from Bayou is that simple resolution policies work when paired with backups. Before any overwrite, our C++ daemon saves the existing file into a local \texttt{.versions/} directory. LWW resolves the conflict automatically, and users can recover the overwritten version if needed.
+
+Saito and Shapiro's \citeyear{saito2005} survey of optimistic replication confirms that this pattern (optimistic updates with rollback support) is standard for weakly connected systems. Their taxonomy classifies our approach as ``state transfer'' (sending full file states) rather than ``operation transfer'' (sending edit operations). State transfer is simpler to implement but uses more bandwidth.
+
+We designed our SQLite metadata schema to support state-based CRDTs in a future version, using the register-based approach from Shapiro et al. \citeyear{shapiro2011}.
+
+\section{Bandwidth-Efficient Synchronization}
+
+Tridgell and Mackerras \citeyear{rsync1996} showed that rolling checksums let two machines identify which blocks of a file changed and transfer only the differences. This is how rsync works.
+
+Our initial design transfers whole files for simplicity. When a file changes, the entire file goes over a direct TCP connection \cite{rfc9293}. This is fine for small files but wasteful for large ones. Block-level delta synchronization is planned as a future optimization. The C++ daemon is designed with an abstraction layer that can accommodate partial transfers without changing the Go coordination layer.
+
+\section{Kernel-Level File Watching}
+
+Detecting file changes efficiently matters for a tool that runs continuously in the background. Polling wastes CPU and adds latency. Modern operating systems provide kernel-level event APIs: inotify on Linux \cite{inotify7} and FSEvents on macOS \cite{fsevents}. These push notifications when files are created, changed, or deleted.
+
+Our C++ daemon registers watchers on the synchronized directory. Events are grouped and forwarded to the Go coordination engine through IPC. This gives near-instant detection with minimal CPU use.
+
+\section{Data Integrity and Transport}
+
+File integrity verification uses SHA-256 hashing \cite{fips1804}, performed by the C++ daemon with memory-mapped file I/O. Each file's hash is stored in the local metadata database and exchanged during synchronization to detect changes without comparing file contents byte by byte.
+
+Network transport uses TCP \cite{rfc9293} for reliable, ordered delivery. The Go daemon manages TCP connection pools with discovered peers and hands over sockets to the C++ daemon for direct-to-disk file streaming.
+
+\section{Summary}
+
+Table~\ref{tab:research-mapping} summarizes how each research finding maps to a component in our system.
+
+\begin{table}[htbp]
+\centering
+\caption{Research-to-Implementation Mapping}
+\label{tab:research-mapping}
+\begin{tabular}{p{4.5cm} p{4cm} p{5cm}}
+\toprule
+\textbf{Research Finding} & \textbf{Source} & \textbf{System Component} \\
+\midrule
+Zero-config discovery & RFC 6762/6763 & Go mDNS broadcaster \\
+\midrule
+Causal event ordering & Lamport (1978) & Per-file Lamport counters \\
+\midrule
+Partition tolerance & CAP theorem (2002) & Offline-first availability \\
+\midrule
+Conflict resolution & Bayou (1995) & LWW + local backups \\
+\midrule
+Optimistic replication & Saito \& Shapiro (2005) & State-transfer architecture \\
+\midrule
+Delta synchronization & rsync (1996) & Planned block-level sync \\
+\midrule
+File change detection & inotify / FSEvents & C++ kernel watchers \\
+\midrule
+Data integrity & SHA-256 / TCP & C++ hashing + Go TCP pools \\
+\bottomrule
+\end{tabular}
+\end{table}

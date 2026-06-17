@@ -1,0 +1,79 @@
+\chapter{Methodology}
+
+This chapter discusses the methodology used in the project, the stages of implementation, and the research design. It covers the participants, the tools used, the development procedure, and how results will be evaluated. This is where our action plan fits.
+
+\section{Methodology Anticipated}
+\label{sec:method-anticipated}
+
+\subsection{Team Structure}
+
+The team has four members, split by area:
+
+\begin{itemize}
+    \item \textbf{Arihant Jain}: Backend (Go). Peer discovery, synchronization coordination, IPC server, TCP networking.
+    \item \textbf{Su Huizhe}: Backend (C++). File watching, SHA-256 hashing, file versioning, disk I/O.
+    \item \textbf{Nizar Soufiya}: Frontend (Java). User interface and interaction design.
+    \item \textbf{Shengkang Duan}: Frontend (Java) and CI/CD. Build automation, testing pipeline, GitHub Actions.
+\end{itemize}
+
+\subsection{Development Process}
+
+We used an iterative, prototype-based approach rather than planning everything upfront:
+
+\begin{enumerate}
+    \item \textbf{Phase 1: Research and Design.} Literature review, architecture design, and protocol specification. This produced the literature review, architecture diagrams, and the interface contracts between Go and C++.
+
+    \item \textbf{Phase 2: Core Prototyping.} Independent development of the Go networking daemon and C++ storage daemon. Each component was built and tested against mock interfaces before integration.
+
+    \item \textbf{Phase 3: Integration.} Connecting Go and C++ through IPC, testing end-to-end synchronization on a local network, and connecting the Java frontend.
+
+    \item \textbf{Phase 4: Evaluation.} Testing the system against the hypotheses from the Introduction: measuring synchronization latency ($H_1$) and evaluating consistency and recovery ($H_2$).
+\end{enumerate}
+
+\subsection{Tools}
+
+\begin{itemize}
+    \item \textbf{Languages:} Go 1.21+, C++17, Java 17
+    \item \textbf{Build:} Go modules, CMake (C++), Gradle (Java)
+    \item \textbf{Version control:} Git with GitHub
+    \item \textbf{CI/CD:} GitHub Actions
+    \item \textbf{Testing:} Go testing package, Google Test (C++), JUnit (Java)
+    \item \textbf{Test environment:} Multiple laptops on the same WLAN
+    \item \textbf{Documentation:} \LaTeX
+\end{itemize}
+
+\subsection{Research Design}
+
+We formulated two hypotheses and will test them through controlled experiments:
+
+\begin{itemize}
+    \item \textbf{$H_1$ (Latency):} Measure sync latency across 3 to 5 peers on a standard WLAN. Success means sub-second average latency for files under 10\,MB.
+
+    \item \textbf{$H_2$ (Consistency):} Simulate concurrent edits and network disconnections. Success means: (a) no data loss from conflict resolution, (b) all peers reach the same file state within 30 seconds of reconnection, and (c) overwritten versions can be recovered from the backup directory.
+\end{itemize}
+
+\subsection{Action Plan}
+
+\begin{table}[htbp]
+\centering
+\caption{Action Plan Timeline}
+\label{tab:action-plan}
+\begin{tabular}{p{3cm} p{10cm}}
+\toprule
+\textbf{Period} & \textbf{Work} \\
+\midrule
+Pre-ALW & Literature review, architecture design, component prototypes \\
+\midrule
+ALW Day 1--2 & IPC integration between Go and C++ daemons \\
+\midrule
+ALW Day 3--4 & End-to-end sync testing, frontend integration \\
+\midrule
+ALW Day 5 & Hypothesis testing, writing up results \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Methodology Updated}
+\label{sec:method-updated}
+
+\textit{This section will be completed at the end of Action Learning Week. It will document the actual process followed, including any changes from the plan, problems encountered, and adjustments made.}

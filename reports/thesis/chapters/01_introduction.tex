@@ -1,0 +1,47 @@
+\chapter{Introduction}
+
+\section{Motivations}
+
+University students working in temporary groups need to share files. In practice, most teams send files through group chats, email, or USB drives. This works for a while, but it leads to duplicated files, conflicting versions, and lost work. When two people edit the same document and send it back through the chat, one version gets lost.
+
+Cloud services like Google Drive solve part of this. But they depend on external servers, require account setup, and impose storage limits. Version control systems like Git track changes well but are built for source code and require technical knowledge that not all team members have. Peer-to-peer tools like Syncthing synchronize files without a server but lack version history. If someone saves a broken file, it overwrites everyone else's copy with no undo.
+
+We wanted a tool that fills the space between these options: automatic synchronization on a local network, with version backups built in, and no setup required.
+
+\section{Context of the Project}
+
+This thesis was developed as part of the Action Learning programme at EPITA. Our team has four members: two working on the backend (Go and C++), and two on the frontend and CI/CD (Java and GitHub Actions).
+
+The project grew from our own experience with file sharing problems during previous coursework. We wanted a system where you put files into a folder and they show up on your teammates' machines. Edit a file and the change spreads automatically. Accidentally overwrite something and a backup is there.
+
+\section{Objectives}
+
+The project has three main objectives:
+
+\begin{enumerate}
+    \item Design a serverless peer-to-peer synchronization system that discovers peers automatically on a local network using mDNS/DNS-SD, synchronizes directories through direct TCP connections, and requires no manual configuration.
+
+    \item Provide version safety by creating local backups automatically before any synchronized overwrite, using Lamport clock timestamps and a Last-Write-Wins conflict resolution policy.
+
+    \item Validate the design through two testable hypotheses:
+    \begin{itemize}
+        \item[$H_1$:] Sub-second average synchronization latency on a standard WLAN without cloud infrastructure.
+        \item[$H_2$:] Sufficient consistency and rollback recovery for 3 to 5 peers using single logical timestamps with LWW, without the overhead of vector clocks or CRDTs.
+    \end{itemize}
+\end{enumerate}
+
+\section{Overview of the Thesis}
+
+Chapter~2 reviews the literature on distributed synchronization and peer-to-peer systems. It analyses the trade-offs between existing approaches and identifies the gap that this project addresses.
+
+Chapter~3 presents the state of the art: the specific research and technical decisions that shaped the architecture.
+
+Chapter~4 describes the system architecture, including the Go/C++ component split and the communication protocols used.
+
+Chapter~5 covers the methodology, including the action plan, development process, and research design.
+
+Chapter~6 presents the expected development results and, after Action Learning Week, the actual outcomes.
+
+Chapter~7 contains the conclusions and outlines future work.
+
+The appendices include detailed comparison tables and supplementary material.

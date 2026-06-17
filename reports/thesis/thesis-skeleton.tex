@@ -1,0 +1,286 @@
+\documentclass[12pt,oneside]{report}
+\usepackage[a4paper, margin=1in]{geometry}
+\usepackage{mathptmx}        % Times New Roman
+\usepackage{setspace}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xcolor}
+
+\doublespacing
+
+% Highlight color for notes/instructions
+\newcommand{\note}[1]{\textcolor{blue}{\textit{#1}}}
+\newcommand{\todo}[1]{\textcolor{red}{\textbf{TODO:} #1}}
+
+\begin{document}
+
+% =============================================================================
+% TITLE PAGE
+% =============================================================================
+\begin{titlepage}
+    \centering
+    \vspace*{3cm}
+    {\LARGE \textbf{Peer-to-Peer Directory Synchronization\\with Lightweight Version Control}}\\
+    \vspace{1.5cm}
+    \large
+    Arihant Jain \\ Su Huizhe \\ Nizar Soufiya \\ Shengkang Duan \\
+    \vspace{1.5cm}
+    EPITA Graduate School of Computer Science\\
+    \vspace{1cm}
+    \textbf{Advisor:} [Name]\\
+    \vfill
+    \today
+\end{titlepage}
+
+% =============================================================================
+% DECLARATION OF OWN WORK
+% =============================================================================
+\chapter*{Declaration of Own Work}
+\note{Required. Print this page and sign it in front of the advisor on presentation day.}
+
+This work has been composed solely by us.
+This work has not been accepted in any previous application for a degree or diploma.
+The work of which this is a record has been wholly done by us.
+All extracts, including those created by generative AI, have been distinguished by quotation marks and the sources of our information have been specifically acknowledged.
+
+\vspace{1cm}
+Date: \underline{\hspace{4cm}}
+
+\begin{tabular}{p{6cm} p{6cm}}
+Name: \underline{\hspace{4cm}} & Signature: \underline{\hspace{4cm}} \\[0.8cm]
+Name: \underline{\hspace{4cm}} & Signature: \underline{\hspace{4cm}} \\[0.8cm]
+Name: \underline{\hspace{4cm}} & Signature: \underline{\hspace{4cm}} \\[0.8cm]
+Name: \underline{\hspace{4cm}} & Signature: \underline{\hspace{4cm}} \\
+\end{tabular}
+
+% =============================================================================
+% ACKNOWLEDGEMENTS
+% =============================================================================
+\chapter*{Acknowledgements}
+\todo{Each member writes a line or two. Thank the advisor, EPITA, each other, etc.}
+
+% =============================================================================
+% ABSTRACT
+% =============================================================================
+\chapter*{Abstract}
+\note{Write this last, at the same time as the Conclusions. One paragraph about the problem, one about the solution. More about the problem than the solution.}
+
+\todo{Write abstract.}
+
+% =============================================================================
+% TABLE OF CONTENTS
+% =============================================================================
+\newpage
+\tableofcontents
+\newpage
+
+% =============================================================================
+% CHAPTER 1 - INTRODUCTION
+% =============================================================================
+\chapter{Introduction}
+
+\note{Template says: ``It is often best to write this section at the same time you write the conclusion.''}
+
+\section{Motivations}
+\note{Why should the reader care? Why is this research important?}
+
+Students need to share project files. Current tools either need servers, require technical knowledge, or lack version safety. We want something simpler.
+
+\todo{Arihant: expand with concrete examples from our coursework experience.}
+
+\section{Context of the Project}
+\note{Context: who we are, what programme, what the project is about.}
+
+Action Learning project at EPITA. Four-person team. Two backend (Go, C++), two frontend/CI-CD (Java, GitHub Actions).
+
+\todo{All: confirm team role descriptions.}
+
+\section{Objectives}
+\note{What the research is trying to achieve.}
+
+Three objectives:
+\begin{enumerate}
+    \item Design a serverless P2P sync system with automatic peer discovery.
+    \item Provide version safety through automatic backups before overwrites.
+    \item Validate with two hypotheses: $H_1$ (latency), $H_2$ (consistency).
+\end{enumerate}
+
+\section{Overview of the Thesis}
+\note{One sentence per chapter saying what it covers.}
+
+\todo{Write after all chapters are done.}
+
+% =============================================================================
+% CHAPTER 2 - LITERATURE REVIEW
+% =============================================================================
+\chapter{Literature Review}
+
+\note{Template says: ``The literature review should be used to develop a working framework and shared vocabulary.'' It is NOT a descriptive list of tools. It is NOT a summary of what you read. You must analyze and add value.}
+
+\note{Mention how research was divided among team members. Move from general to specific.}
+
+\section{The Collaborative File Management Landscape}
+\note{Brief overview of four categories: centralized, VCS, P2P sync, local sharing. One paragraph each, focused on what we learned, not feature lists.}
+
+\todo{All: review and confirm the categories and assessments are fair.}
+
+\section{Critical Analysis of Synchronization Approaches}
+\note{This is the core section. Discuss what the literature taught us and how it changed our design. Include disagreements, limitations, open questions.}
+
+\subsection{The Ordering Problem}
+Lamport clocks vs. vector clocks. Why we chose Lamport. What we lose.
+
+\subsection{Consistency vs. Availability}
+CAP theorem. Why we chose availability. What ``eventually consistent'' means for us.
+
+\subsection{Conflict Resolution}
+LWW vs. CRDTs vs. operational transformation. Why we chose LWW with backups.
+
+\subsection{Efficient Data Propagation}
+rsync algorithm, epidemic algorithms. Why we start with whole-file transfers.
+
+\todo{Arihant/Huizhe: these are mostly done. Review for accuracy.}
+
+\section{Identified Gap}
+\note{Show that no existing tool covers all five dimensions well. Reference the comparison tables in the Appendix.}
+
+\todo{All: verify the gap summary table is accurate.}
+
+\section{Positioning the Project}
+Key differentiators: LAN-only, zero config, built-in backups, split architecture.
+
+\section{Summary}
+Three main takeaways from the literature and how they shaped the design.
+
+% =============================================================================
+% CHAPTER 3 - STATE OF THE ART
+% =============================================================================
+\chapter{State of the Art}
+
+\note{Template says: ``Describe the state of the art resulting from the research you conducted. Include the decisions and choices you made for technology, architecture, design, methodology. Document all relevant sources with citations. Briefly describe and critically assess cited works.''}
+
+\section{Summary}
+\todo{Write a summary paragraph after the sections below are done.}
+
+\section{Zero-Configuration Peer Discovery}
+mDNS/DNS-SD. Why we chose it. Limitations (multicast filtering).
+
+\section{Event Ordering and Logical Clocks}
+Lamport clocks. Known limitation (cannot detect concurrency). Trade-off vs. vector clocks.
+
+\section{Consistency Model}
+CAP theorem application. Eventually consistent. Backup as safety net.
+
+\section{Conflict Resolution}
+LWW with local backups. Based on Bayou. Schema ready for CRDTs later.
+
+\section{Other Technical Decisions}
+\todo{Add sections for: bandwidth (rsync future), file watching (inotify/FSEvents), hashing (SHA-256), transport (TCP).}
+
+% =============================================================================
+% CHAPTER 4 - SYSTEM ARCHITECTURE
+% =============================================================================
+\chapter{System Architecture}
+
+\note{Template says: ``This chapter describes the design adopted by this research to achieve the aims and objectives stated in the Introduction.''}
+
+\section{System Architecture Anticipated}
+\note{Submitted with thesis.}
+
+\subsection{Components}
+Three components: Go daemon, C++ daemon, Java frontend.
+
+\todo{All: add a diagram here. Even a simple box diagram helps.}
+
+\subsection{Data Flow}
+Step-by-step sync cycle.
+
+\subsection{Metadata Storage}
+SQLite schema.
+
+\subsection{Communication Protocols}
+mDNS, TCP, IPC.
+
+\todo{Arihant/Huizhe: fill in protocol details. Nizar/Shengkang: fill in frontend-to-backend interface.}
+
+\section{System Architecture Updated}
+\note{Left blank. Completed at end of Action Learning Week.}
+
+% =============================================================================
+% CHAPTER 5 - METHODOLOGY
+% =============================================================================
+\chapter{Methodology}
+
+\note{Template says: ``Discuss the methodology, the stages of implementation, and the research design. Detail participants, instruments, procedure, data analysis.''}
+
+\note{This is where the action plan fits.}
+
+\section{Methodology Anticipated}
+\note{Submitted with thesis.}
+
+\subsection{Team Structure}
+Who does what.
+
+\subsection{Development Process}
+Four phases: research, prototyping, integration, evaluation.
+
+\subsection{Tools}
+Languages, build systems, CI/CD, test environment.
+
+\subsection{Research Design}
+Two hypotheses. How we test them. What counts as success.
+
+\subsection{Action Plan}
+Timeline table: Pre-ALW, Day 1--2, Day 3--4, Day 5.
+
+\todo{All: review the action plan timeline. Is it realistic?}
+
+\section{Methodology Updated}
+\note{Left blank. Completed at end of Action Learning Week.}
+
+% =============================================================================
+% CHAPTER 6 - RESULTS
+% =============================================================================
+\chapter{Results}
+
+\section{Development Anticipated}
+\note{Submitted with thesis. What we plan to build.}
+
+Expected outputs: Go daemon, C++ daemon, Java frontend, hypothesis test results.
+
+\todo{All: list specific deliverables for your component.}
+
+\section{Development Updated}
+\note{Left blank with thesis. Submitted separately at end of ALW. Maximum half a page.}
+
+% =============================================================================
+% CHAPTER 7 - CONCLUSIONS
+% =============================================================================
+\chapter{Conclusions}
+
+\note{Template says: ``Summarize the problem, the solution, and its main innovative features, outlining future work.''}
+
+\todo{Write at the same time as the Abstract.}
+
+% =============================================================================
+% BIBLIOGRAPHY
+% =============================================================================
+\newpage
+\note{APA style required. Use in-text citations throughout.}
+\todo{All: make sure every claim has a citation. Every source in the bibliography must be cited in the text.}
+
+% =============================================================================
+% APPENDICES
+% =============================================================================
+\appendix
+\chapter{Comparison Tables}
+\note{Detailed dimension-by-dimension comparison tables moved here from Chapter 2 to keep the literature review concise.}
+
+\todo{All: verify ratings in the tables are accurate and fair.}
+
+\chapter{List of Figures}
+\todo{Generated automatically once we add figures.}
+
+\chapter{List of Tables}
+\todo{Generated automatically once we add tables.}
+
+\end{document}

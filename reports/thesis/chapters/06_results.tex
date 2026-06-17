@@ -1,0 +1,47 @@
+\chapter{Results}
+
+This chapter covers the expected results from the project and, after Action Learning Week, the actual outcomes.
+
+\section{Development Anticipated}
+\label{sec:results-anticipated}
+
+Based on the architecture and methodology described above, we expect the following:
+
+\begin{enumerate}
+    \item \textbf{Go Networking Daemon} that can:
+    \begin{itemize}
+        \item Discover peers on the local network through mDNS/DNS-SD.
+        \item Maintain TCP connections with discovered peers.
+        \item Exchange file metadata (paths, hashes, Lamport timestamps) to detect changes.
+        \item Request and coordinate file transfers.
+        \item Communicate with the local C++ daemon through Unix domain sockets.
+    \end{itemize}
+
+    \item \textbf{C++ Storage Daemon} that can:
+    \begin{itemize}
+        \item Watch the synchronized directory for changes using kernel-level APIs (inotify on Linux, FSEvents on macOS).
+        \item Compute SHA-256 hashes of changed files using memory-mapped I/O.
+        \item Save existing files to a \texttt{.versions/} directory before overwriting.
+        \item Write incoming file data directly to disk from a TCP socket.
+    \end{itemize}
+
+    \item \textbf{Java Frontend} that shows:
+    \begin{itemize}
+        \item Current sync status (connected peers, progress).
+        \item File version history with the option to restore old versions.
+        \item Workspace settings (sync directory, peer list).
+    \end{itemize}
+
+    \item \textbf{Hypothesis Testing:}
+    \begin{itemize}
+        \item[$H_1$:] Sync latency measurements across 3 to 5 peers on campus WLAN, targeting sub-second averages for files under 10\,MB.
+        \item[$H_2$:] Concurrent edit tests showing no permanent data loss, convergence within 30 seconds, and recoverability from backups.
+    \end{itemize}
+\end{enumerate}
+
+\section{Development Updated}
+\label{sec:results-updated}
+
+\textit{This section will be completed at the end of Action Learning Week. It will describe the differences between what was planned and what was actually built, including features that were added, changed, or deferred.}
+
+\textit{Maximum one-half page.}
