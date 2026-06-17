@@ -35,11 +35,18 @@ func NewPeerRegistry() *PeerRegistry {
 	}
 }
 
-func (pr *PeerRegistry) StartDiscovery() (*zeroconf.Server, error) {
+func (pr *PeerRegistry) StartDiscovery(localPeerID string, port int) (*zeroconf.Server, error) {
 	// Register this peer via mDNS
-	hostname, _ := os.Hostname()
+	instanceName := localPeerID
+	if instanceName == "" {
+		instanceName, _ = os.Hostname()
+	}
 
-	server, err := zeroconf.Register(hostname, "_p2psync._tcp", "local.", 9876, []string{"version=1.0"}, nil)
+	if port == 0 {
+		port = 9876
+	}
+
+	server, err := zeroconf.Register(instanceName, "_p2psync._tcp", "local.", port, []string{"version=1.0"}, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to register service: %v", err)
 	}
@@ -72,14 +79,20 @@ func (pr *PeerRegistry) browsePeers() {
 }
 
 func (pr *PeerRegistry) handlePeerDiscovered(entry *zeroconf.ServiceEntry) {
-	if len(entry.AddrIPv4) == 0 {
+	var address string
+	if len(entry.AddrIPv4) > 0 {
+		address = entry.AddrIPv4[0].String()
+	} else if len(entry.AddrIPv6) > 0 {
+		address = entry.AddrIPv6[0].String()
+	} else {
+		// No IP addresses resolved yet
 		return
 	}
 
 	peer := &Peer{
 		ID:       entry.Instance,
 		Name:     entry.Instance,
-		Address:  entry.AddrIPv4[0].String(),
+		Address:  address,
 		Port:     entry.Port,
 		LastSeen: time.Now(),
 	}

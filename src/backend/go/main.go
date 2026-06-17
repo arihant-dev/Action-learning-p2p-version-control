@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -32,9 +33,26 @@ func main() {
 	if err != nil {
 		localPeerID = "unknown-peer"
 	}
+	if envPeerID := os.Getenv("PEER_ID"); envPeerID != "" {
+		localPeerID = envPeerID
+	}
+
+	// Read port config
+	p2pPort := 9876
+	if envPort := os.Getenv("P2P_PORT"); envPort != "" {
+		if val, err := strconv.Atoi(envPort); err == nil {
+			p2pPort = val
+		}
+	}
+
+	// Read IPC socket path config
+	ipcSocket := "/tmp/p2p_sync.sock"
+	if envIpcSocket := os.Getenv("IPC_SOCKET"); envIpcSocket != "" {
+		ipcSocket = envIpcSocket
+	}
 
 	// Start IPC server
-	ipcServer := ipc.NewIpcServer("/tmp/p2p_sync.sock")
+	ipcServer := ipc.NewIpcServer(ipcSocket)
 	if err := ipcServer.Start(); err != nil {
 		log.Fatalf("Failed to start IPC server: %v", err)
 	}
@@ -42,7 +60,7 @@ func main() {
 
 	// Start peer discovery
 	peerRegistry := discovery.NewPeerRegistry()
-	mdnsServer, err := peerRegistry.StartDiscovery()
+	mdnsServer, err := peerRegistry.StartDiscovery(localPeerID, p2pPort)
 	if err != nil {
 		log.Fatalf("Failed to start peer discovery: %v", err)
 	}
@@ -54,7 +72,7 @@ func main() {
 
 	// Start connection manager with localPeerID
 	connMgr := network.NewConnectionManager(localPeerID)
-	if err := connMgr.StartServer(9876); err != nil {
+	if err := connMgr.StartServer(p2pPort); err != nil {
 		log.Fatalf("Failed to start P2P server: %v", err)
 	}
 	defer connMgr.Stop()
