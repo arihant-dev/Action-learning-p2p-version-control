@@ -100,7 +100,7 @@ func TestBroadcast(t *testing.T) {
 
 	<-connectedChan
 
-	// Register clean OnMessage listener on receiver
+	// Register OnMessage listener on receiver
 	receivedMsgChan := make(chan *ipc.Message, 1)
 	cmReceiver.OnMessage = func(peerID string, msg *ipc.Message) {
 		if peerID == "sender" {
@@ -130,5 +130,155 @@ func TestBroadcast(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timeout waiting to receive broadcast message")
+	}
+}
+
+func TestHeartbeatTimeout(t *testing.T) {
+	cmA := NewConnectionManager("peer-a")
+	cmA.heartbeatInterval = 50 * time.Millisecond
+	cmA.heartbeatTimeout = 150 * time.Millisecond
+	err := cmA.StartServer(0)
+	if err != nil {
+		t.Fatalf("failed to start server A: %v", err)
+	}
+	defer cmA.Stop()
+
+	// Start a raw TCP server to simulate a frozen peer B
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to start mock listener: %v", err)
+	}
+	defer listener.Close()
+
+	port := listener.Addr().(*net.TCPAddr).Port
+
+	disconnectedChan := make(chan string, 1)
+	cmA.OnDisconnected = func(peerID string) {
+		disconnectedChan <- peerID
+	}
+
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+
+		// Read handshake
+		msg, err := ipc.ReadMessage(conn)
+		if err != nil {
+			return
+		}
+		if msg.Type != "handshake" {
+			return
+		}
+
+		// Write handshake response
+		respPayload, _ := json.Marshal(HandshakePayload{PeerID: "peer-b"})
+		respMsg := &ipc.Message{
+			Version: "1.0",
+			Type:    "handshake",
+			Payload: respPayload,
+		}
+		_ = ipc.WriteMessage(conn, respMsg)
+
+		// Sleep and ignore all incoming pings
+		time.Sleep(1 * time.Second)
+	}()
+
+	err = cmA.Connect("peer-b", "127.0.0.1", port)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+
+	if !cmA.IsConnected("peer-b") {
+		t.Fatal("expected peer-b to be connected initially")
+	}
+
+	select {
+	case id := <-disconnectedChan:
+		if id != "peer-b" {
+			t.Errorf("expected disconnected peer-b, got %s", id)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for heartbeat disconnect")
+	}
+
+	if cmA.IsConnected("peer-b") {
+		t.Error("expected peer-b to be disconnected after heartbeat timeout")
+	}
+}
+
+func TestAutoReconnect(t *testing.T) {
+	// Server A
+	cmA := NewConnectionManager("peer-a")
+	err := cmA.StartServer(0)
+	if err != nil {
+		t.Fatalf("failed to start server A: %v", err)
+	}
+	defer cmA.Stop()
+
+	cmA.mu.RLock()
+	addr := cmA.listener.Addr().(*net.TCPAddr)
+	cmA.mu.RUnlock()
+
+	// Client B
+	cmB := NewConnectionManager("peer-b")
+	cmB.reconnectInterval = 100 * time.Millisecond
+	err = cmB.StartServer(0)
+	if err != nil {
+		t.Fatalf("failed to start server B: %v", err)
+	}
+	defer cmB.Stop()
+
+	connectedChan := make(chan string, 2)
+	cmB.OnConnected = func(peerID string) {
+		connectedChan <- peerID
+	}
+
+	err = cmB.Connect("peer-a", "127.0.0.1", addr.Port)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+
+	// Verify initial connection
+	select {
+	case id := <-connectedChan:
+		if id != "peer-a" {
+			t.Errorf("expected connection to peer-a, got %s", id)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for initial connection")
+	}
+
+	// Disconnect Server A
+	cmA.Stop()
+
+	// Wait for client B to detect disconnect
+	time.Sleep(200 * time.Millisecond)
+	if cmB.IsConnected("peer-a") {
+		t.Fatal("expected B to detect disconnect of A")
+	}
+
+	// Restart Server A on same port
+	cmA2 := NewConnectionManager("peer-a")
+	err = cmA2.StartServer(addr.Port)
+	if err != nil {
+		t.Fatalf("failed to restart server A: %v", err)
+	}
+	defer cmA2.Stop()
+
+	// Wait for B to reconnect automatically
+	select {
+	case id := <-connectedChan:
+		if id != "peer-a" {
+			t.Errorf("expected reconnect to peer-a, got %s", id)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timeout waiting for auto-reconnection")
+	}
+
+	if !cmB.IsConnected("peer-a") {
+		t.Error("expected B to be connected to peer-a after auto-reconnect")
 	}
 }

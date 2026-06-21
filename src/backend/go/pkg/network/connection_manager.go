@@ -16,12 +16,34 @@ type HandshakePayload struct {
 	PeerID string `json:"peer_id"`
 }
 
+type targetPeer struct {
+	id         string
+	address    string
+	port       int
+	nextRetry  time.Time
+	retryDelay time.Duration
+}
+
 type ConnectionManager struct {
 	localPeerID string
 	connections map[string]net.Conn
 	mu          sync.RWMutex
 	listener    net.Listener
 	running     bool
+
+	// Heartbeat configurations
+	heartbeatInterval time.Duration
+	heartbeatTimeout  time.Duration
+	lastSeen          map[string]time.Time
+
+	// Reconnection configurations
+	targets           map[string]*targetPeer
+	reconnectInterval time.Duration
+	maxRetryDelay     time.Duration
+
+	// Channels and WaitGroup for loop control
+	stopChan chan struct{}
+	wg       sync.WaitGroup
 
 	OnConnected    func(peerID string)
 	OnDisconnected func(peerID string)
@@ -30,8 +52,15 @@ type ConnectionManager struct {
 
 func NewConnectionManager(localPeerID string) *ConnectionManager {
 	return &ConnectionManager{
-		localPeerID: localPeerID,
-		connections: make(map[string]net.Conn),
+		localPeerID:       localPeerID,
+		connections:       make(map[string]net.Conn),
+		lastSeen:          make(map[string]time.Time),
+		targets:           make(map[string]*targetPeer),
+		heartbeatInterval: 5 * time.Second,
+		heartbeatTimeout:  15 * time.Second,
+		reconnectInterval: 2 * time.Second,
+		maxRetryDelay:     60 * time.Second,
+		stopChan:          make(chan struct{}),
 	}
 }
 
@@ -50,6 +79,7 @@ func (cm *ConnectionManager) StartServer(port int) error {
 
 	log.Printf("P2P server listening on port %d\n", port)
 
+	// Start accepting connections
 	go func() {
 		for {
 			conn, err := listener.Accept()
@@ -67,6 +97,11 @@ func (cm *ConnectionManager) StartServer(port int) error {
 			go cm.handleIncomingConnection(conn)
 		}
 	}()
+
+	// Start heartbeat and reconnect tasks
+	cm.wg.Add(2)
+	go cm.heartbeatLoop()
+	go cm.reconnectLoop()
 
 	return nil
 }
@@ -122,6 +157,7 @@ func (cm *ConnectionManager) handleIncomingConnection(conn net.Conn) {
 		oldConn.Close()
 	}
 	cm.connections[peerID] = conn
+	cm.lastSeen[peerID] = time.Now()
 	cm.mu.Unlock()
 
 	log.Printf("Accepted peer connection from: %s (%s)\n", peerID, conn.RemoteAddr())
@@ -134,9 +170,19 @@ func (cm *ConnectionManager) handleIncomingConnection(conn net.Conn) {
 	go cm.readLoop(peerID, conn)
 }
 
-// Connect dials out to a discovered peer and performs the P2P handshake
+// Connect dials out to a discovered peer and performs the P2P handshake.
+// Also registers the peer ID, address, and port in target list for auto-reconnection.
 func (cm *ConnectionManager) Connect(peerID, address string, port int) error {
 	cm.mu.Lock()
+	// Add or update target list
+	if _, exists := cm.targets[peerID]; !exists {
+		cm.targets[peerID] = &targetPeer{
+			id:         peerID,
+			address:    address,
+			port:       port,
+			retryDelay: 1 * time.Second,
+		}
+	}
 	if _, exists := cm.connections[peerID]; exists {
 		cm.mu.Unlock()
 		return nil // Already connected
@@ -193,6 +239,12 @@ func (cm *ConnectionManager) Connect(peerID, address string, port int) error {
 		oldConn.Close()
 	}
 	cm.connections[peerID] = conn
+	cm.lastSeen[peerID] = time.Now()
+	// Reset backoff on successful connect
+	if t, exists := cm.targets[peerID]; exists {
+		t.retryDelay = 1 * time.Second
+		t.nextRetry = time.Time{}
+	}
 	cm.mu.Unlock()
 
 	log.Printf("Successfully established P2P connection to: %s (%s)\n", peerID, addr)
@@ -207,6 +259,14 @@ func (cm *ConnectionManager) Connect(peerID, address string, port int) error {
 	return nil
 }
 
+// RemoveTarget disconnects from a peer and removes it from the auto-reconnection target list
+func (cm *ConnectionManager) RemoveTarget(peerID string) {
+	cm.mu.Lock()
+	delete(cm.targets, peerID)
+	cm.mu.Unlock()
+	cm.CloseConnection(peerID)
+}
+
 func (cm *ConnectionManager) readLoop(peerID string, conn net.Conn) {
 	defer cm.CloseConnection(peerID)
 
@@ -215,6 +275,26 @@ func (cm *ConnectionManager) readLoop(peerID string, conn net.Conn) {
 		if err != nil {
 			// EOF or closed connection is normal on shutdown/disconnect
 			return
+		}
+
+		// Update activity on any message received
+		cm.mu.Lock()
+		cm.lastSeen[peerID] = time.Now()
+		cm.mu.Unlock()
+
+		if msg.Type == "ping" {
+			pongMsg := &ipc.Message{
+				Version:   "1.0",
+				Type:      "pong",
+				Source:    "go",
+				Timestamp: time.Now().UnixNano() / int64(time.Millisecond),
+			}
+			_ = ipc.WriteMessage(conn, pongMsg)
+			continue
+		}
+
+		if msg.Type == "pong" {
+			continue
 		}
 
 		if cm.OnMessage != nil {
@@ -237,6 +317,7 @@ func (cm *ConnectionManager) CloseConnection(peerID string) {
 	if conn, exists := cm.connections[peerID]; exists {
 		conn.Close()
 		delete(cm.connections, peerID)
+		delete(cm.lastSeen, peerID)
 		log.Printf("Disconnected from peer: %s\n", peerID)
 
 		if cm.OnDisconnected != nil {
@@ -271,6 +352,10 @@ func (cm *ConnectionManager) Broadcast(msg *ipc.Message) {
 // Stop stops the server and closes all peer connections
 func (cm *ConnectionManager) Stop() {
 	cm.mu.Lock()
+	if !cm.running {
+		cm.mu.Unlock()
+		return
+	}
 	cm.running = false
 	if cm.listener != nil {
 		cm.listener.Close()
@@ -280,4 +365,139 @@ func (cm *ConnectionManager) Stop() {
 		delete(cm.connections, id)
 	}
 	cm.mu.Unlock()
+
+	close(cm.stopChan)
+	cm.wg.Wait()
+}
+
+// heartbeatLoop runs periodically to send ping packets and detect timed out peers
+func (cm *ConnectionManager) heartbeatLoop() {
+	defer cm.wg.Done()
+	ticker := time.NewTicker(cm.heartbeatInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-cm.stopChan:
+			return
+		case <-ticker.C:
+			cm.checkHeartbeats()
+		}
+	}
+}
+
+func (cm *ConnectionManager) checkHeartbeats() {
+	cm.mu.Lock()
+	now := time.Now()
+	var toDisconnect []string
+
+	// 1. Detect timeouts
+	for id, lastSeenTime := range cm.lastSeen {
+		if now.Sub(lastSeenTime) > cm.heartbeatTimeout {
+			toDisconnect = append(toDisconnect, id)
+		}
+	}
+	cm.mu.Unlock()
+
+	// Disconnect peers that timed out
+	for _, id := range toDisconnect {
+		log.Printf("[ConnectionManager] Heartbeat timeout for peer %s. Disconnecting.\n", id)
+		cm.CloseConnection(id)
+	}
+
+	// 2. Send ping heartbeats
+	cm.mu.RLock()
+	pingMsg := &ipc.Message{
+		Version:   "1.0",
+		Type:      "ping",
+		Source:    "go",
+		Timestamp: now.UnixNano() / int64(time.Millisecond),
+	}
+	type peerConn struct {
+		id   string
+		conn net.Conn
+	}
+	var activeConns []peerConn
+	for id, conn := range cm.connections {
+		activeConns = append(activeConns, peerConn{id: id, conn: conn})
+	}
+	cm.mu.RUnlock()
+
+	for _, pc := range activeConns {
+		go func(id string, conn net.Conn) {
+			if err := ipc.WriteMessage(conn, pingMsg); err != nil {
+				log.Printf("[ConnectionManager] Failed to send ping to peer %s: %v. Disconnecting.\n", id, err)
+				cm.CloseConnection(id)
+			}
+		}(pc.id, pc.conn)
+	}
+}
+
+// reconnectLoop attempts to dial disconnected target peers using exponential backoff
+func (cm *ConnectionManager) reconnectLoop() {
+	defer cm.wg.Done()
+	ticker := time.NewTicker(cm.reconnectInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-cm.stopChan:
+			return
+		case <-ticker.C:
+			cm.attemptReconnections()
+		}
+	}
+}
+
+func (cm *ConnectionManager) attemptReconnections() {
+	cm.mu.Lock()
+	type targetInfo struct {
+		id      string
+		address string
+		port    int
+	}
+	var toRetry []targetInfo
+	now := time.Now()
+
+	for id, target := range cm.targets {
+		if _, connected := cm.connections[id]; connected {
+			continue
+		}
+		if now.Before(target.nextRetry) {
+			continue
+		}
+		toRetry = append(toRetry, targetInfo{
+			id:      target.id,
+			address: target.address,
+			port:    target.port,
+		})
+	}
+	cm.mu.Unlock()
+
+	for _, target := range toRetry {
+		go func(t targetInfo) {
+			log.Printf("[ConnectionManager] Auto-reconnecting to target peer %s (%s:%d)...\n", t.id, t.address, t.port)
+			err := cm.Connect(t.id, t.address, t.port)
+
+			cm.mu.Lock()
+			defer cm.mu.Unlock()
+
+			tPeer, exists := cm.targets[t.id]
+			if !exists {
+				return
+			}
+
+			if err != nil {
+				tPeer.retryDelay *= 2
+				if tPeer.retryDelay > cm.maxRetryDelay {
+					tPeer.retryDelay = cm.maxRetryDelay
+				}
+				tPeer.nextRetry = time.Now().Add(tPeer.retryDelay)
+				log.Printf("[ConnectionManager] Failed to reconnect to %s: %v. Next retry in %v\n", t.id, err, tPeer.retryDelay)
+			} else {
+				tPeer.retryDelay = 1 * time.Second
+				tPeer.nextRetry = time.Time{}
+			}
+		}(target)
+	}
 }
