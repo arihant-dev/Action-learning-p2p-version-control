@@ -412,7 +412,7 @@ func TestEndToEndP2PMetadataAndFileTransfer(t *testing.T) {
 	if len(sessionsB) != 1 {
 		t.Fatalf("expected 1 session on Peer B, got %d", len(sessionsB))
 	}
-	sessB := sessionsB[0]
+	sessB := &sessionsB[0]
 	if sessB.Type != "download" || sessB.FilePath != "docs/readme.txt" {
 		t.Fatalf("invalid session on Peer B: %+v", sessB)
 	}
@@ -422,7 +422,7 @@ func TestEndToEndP2PMetadataAndFileTransfer(t *testing.T) {
 	if len(sessionsA) != 1 {
 		t.Fatalf("expected 1 session on Peer A, got %d", len(sessionsA))
 	}
-	sessA := sessionsA[0]
+	sessA := &sessionsA[0]
 	if sessA.Type != "upload" || sessA.FilePath != "docs/readme.txt" {
 		t.Fatalf("invalid session on Peer A: %+v", sessA)
 	}
