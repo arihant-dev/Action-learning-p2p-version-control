@@ -14,6 +14,8 @@ import (
 	"p2p/pkg/ipc"
 	"p2p/pkg/network"
 	"p2p/pkg/protocol"
+	"p2p/pkg/storage/sqlite"
+	"p2p/pkg/sync"
 )
 
 func main() {
@@ -66,6 +68,24 @@ func main() {
 	}
 	defer connMgr.Stop()
 
+	// Initialize sqlite DB
+	dbPath := "p2p_sync.db"
+	if envDbPath := os.Getenv("DB_PATH"); envDbPath != "" {
+		dbPath = envDbPath
+	}
+	db, err := sqlite.Open(dbPath)
+	if err != nil {
+		log.Fatalf("Failed to open SQLite database: %v", err)
+	}
+	defer db.Close()
+
+	// Start sync coordinator
+	coord := sync.NewSyncCoordinator(db, ipcServer, connMgr, localPeerID)
+	if err := coord.Start(); err != nil {
+		log.Fatalf("Failed to start sync coordinator: %v", err)
+	}
+	defer coord.Stop()
+
 	// Hook up discovery event to trigger outward dials
 	peerRegistry.OnPeerDiscovered = func(peer *discovery.Peer) {
 		// Don't connect to ourselves (in case mDNS broadcasts ourselves)
@@ -98,8 +118,17 @@ func main() {
 
 	// Hook up incoming P2P message forwards
 	connMgr.OnMessage = func(peerID string, msg *ipc.Message) {
-		log.Printf("Forwarding P2P message from peer %s over IPC: %s\n", peerID, msg.Type)
-		// Forward any inbound peer updates directly to the local C++ daemon
+		log.Printf("Received P2P message from peer %s: %s\n", peerID, msg.Type)
+		
+		// Let the coordinator process sync-related network messages first
+		if msg.Type == "file_metadata_update" || msg.Type == "file_request" || msg.Type == "file_response" {
+			if err := coord.HandleP2PMessage(peerID, msg); err != nil {
+				log.Printf("Coordinator failed to handle P2P message: %v\n", err)
+			}
+			return
+		}
+
+		// Forward any other messages to C++ daemon over IPC
 		ipcServer.SendMessage(msg)
 	}
 
@@ -107,10 +136,11 @@ func main() {
 	ipcServer.OnMessage = func(msg *ipc.Message) error {
 		fmt.Printf("Received from C++: %s\n", msg.Type)
 
+		if msg.Type == "file_changed" || msg.Type == "add_repository" || msg.Type == "remove_repository" {
+			return coord.HandleIPCMessage(msg)
+		}
+
 		switch msg.Type {
-		case "file_changed":
-			// Broadcast to all connected peers
-			return handleFileChanged(msg, connMgr)
 		case "peer_list_request":
 			// Send peer list back to C++
 			return sendPeerList(peerRegistry, connMgr, ipcServer)

@@ -78,6 +78,30 @@ func (s *MetadataStore) Get(repoID, filepath string) (*FileMetadata, error) {
 	return m, nil
 }
 
+// GetByPathAndHash retrieves file metadata across all repositories by filepath and hash.
+// Returns nil if not found or if the file is marked as deleted.
+func (s *MetadataStore) GetByPathAndHash(filepath, hash string) (*FileMetadata, error) {
+	m := &FileMetadata{}
+	var deleted int
+	err := s.db.QueryRow(`
+		SELECT repository_id, filepath, hash, size, version,
+		       local_last_modified, is_deleted, updated_at
+		FROM file_metadata
+		WHERE filepath = ? AND hash = ? AND is_deleted = 0
+	`, filepath, hash).Scan(
+		&m.RepositoryID, &m.Filepath, &m.Hash, &m.Size, &m.Version,
+		&m.LocalLastModified, &deleted, &m.UpdatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get file metadata by path and hash: %w", err)
+	}
+	m.IsDeleted = deleted != 0
+	return m, nil
+}
+
 // ListByRepository returns all file metadata records for a given
 // repository, optionally including soft-deleted (tombstoned) entries.
 func (s *MetadataStore) ListByRepository(repoID string, includeDeleted bool) ([]*FileMetadata, error) {

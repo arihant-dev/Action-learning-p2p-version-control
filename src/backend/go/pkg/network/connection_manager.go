@@ -27,6 +27,7 @@ type targetPeer struct {
 type ConnectionManager struct {
 	localPeerID string
 	connections map[string]net.Conn
+	writeMus    map[string]*sync.Mutex
 	mu          sync.RWMutex
 	listener    net.Listener
 	running     bool
@@ -54,6 +55,7 @@ func NewConnectionManager(localPeerID string) *ConnectionManager {
 	return &ConnectionManager{
 		localPeerID:       localPeerID,
 		connections:       make(map[string]net.Conn),
+		writeMus:          make(map[string]*sync.Mutex),
 		lastSeen:          make(map[string]time.Time),
 		targets:           make(map[string]*targetPeer),
 		heartbeatInterval: 5 * time.Second,
@@ -157,6 +159,7 @@ func (cm *ConnectionManager) handleIncomingConnection(conn net.Conn) {
 		oldConn.Close()
 	}
 	cm.connections[peerID] = conn
+	cm.writeMus[peerID] = &sync.Mutex{}
 	cm.lastSeen[peerID] = time.Now()
 	cm.mu.Unlock()
 
@@ -239,6 +242,7 @@ func (cm *ConnectionManager) Connect(peerID, address string, port int) error {
 		oldConn.Close()
 	}
 	cm.connections[peerID] = conn
+	cm.writeMus[peerID] = &sync.Mutex{}
 	cm.lastSeen[peerID] = time.Now()
 	// Reset backoff on successful connect
 	if t, exists := cm.targets[peerID]; exists {
@@ -289,7 +293,7 @@ func (cm *ConnectionManager) readLoop(peerID string, conn net.Conn) {
 				Source:    "go",
 				Timestamp: time.Now().UnixNano() / int64(time.Millisecond),
 			}
-			_ = ipc.WriteMessage(conn, pongMsg)
+			_ = cm.SendToPeer(peerID, pongMsg)
 			continue
 		}
 
@@ -317,6 +321,7 @@ func (cm *ConnectionManager) CloseConnection(peerID string) {
 	if conn, exists := cm.connections[peerID]; exists {
 		conn.Close()
 		delete(cm.connections, peerID)
+		delete(cm.writeMus, peerID)
 		delete(cm.lastSeen, peerID)
 		log.Printf("Disconnected from peer: %s\n", peerID)
 
@@ -334,18 +339,38 @@ func (cm *ConnectionManager) IsConnected(peerID string) bool {
 	return exists
 }
 
+// SendToPeer writes a message to a specific peer's TCP connection in a thread-safe serialized way.
+func (cm *ConnectionManager) SendToPeer(peerID string, msg *ipc.Message) error {
+	cm.mu.RLock()
+	conn, existsConn := cm.connections[peerID]
+	mu, existsMu := cm.writeMus[peerID]
+	cm.mu.RUnlock()
+
+	if !existsConn || !existsMu {
+		return fmt.Errorf("peer %s not connected", peerID)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	return ipc.WriteMessage(conn, msg)
+}
+
 // Broadcast sends a message to all active TCP peer connections
 func (cm *ConnectionManager) Broadcast(msg *ipc.Message) {
 	cm.mu.RLock()
-	defer cm.mu.RUnlock()
+	peerIDs := make([]string, 0, len(cm.connections))
+	for id := range cm.connections {
+		peerIDs = append(peerIDs, id)
+	}
+	cm.mu.RUnlock()
 
-	for peerID, conn := range cm.connections {
-		go func(id string, c net.Conn) {
-			if err := ipc.WriteMessage(c, msg); err != nil {
-				log.Printf("Failed to send message to peer %s: %v\n", id, err)
-				cm.CloseConnection(id)
+	for _, id := range peerIDs {
+		go func(peerID string) {
+			if err := cm.SendToPeer(peerID, msg); err != nil {
+				log.Printf("Failed to broadcast message to peer %s: %v\n", peerID, err)
+				cm.CloseConnection(peerID)
 			}
-		}(peerID, conn)
+		}(id)
 	}
 }
 
@@ -413,23 +438,19 @@ func (cm *ConnectionManager) checkHeartbeats() {
 		Source:    "go",
 		Timestamp: now.UnixNano() / int64(time.Millisecond),
 	}
-	type peerConn struct {
-		id   string
-		conn net.Conn
-	}
-	var activeConns []peerConn
-	for id, conn := range cm.connections {
-		activeConns = append(activeConns, peerConn{id: id, conn: conn})
+	var peerIDs []string
+	for id := range cm.connections {
+		peerIDs = append(peerIDs, id)
 	}
 	cm.mu.RUnlock()
 
-	for _, pc := range activeConns {
-		go func(id string, conn net.Conn) {
-			if err := ipc.WriteMessage(conn, pingMsg); err != nil {
-				log.Printf("[ConnectionManager] Failed to send ping to peer %s: %v. Disconnecting.\n", id, err)
-				cm.CloseConnection(id)
+	for _, id := range peerIDs {
+		go func(peerID string) {
+			if err := cm.SendToPeer(peerID, pingMsg); err != nil {
+				log.Printf("[ConnectionManager] Failed to send ping to peer %s: %v. Disconnecting.\n", peerID, err)
+				cm.CloseConnection(peerID)
 			}
-		}(pc.id, pc.conn)
+		}(id)
 	}
 }
 
@@ -500,4 +521,14 @@ func (cm *ConnectionManager) attemptReconnections() {
 			}
 		}(target)
 	}
+}
+
+// Port returns the dynamic TCP port of the listening socket.
+func (cm *ConnectionManager) Port() int {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	if cm.listener == nil {
+		return 0
+	}
+	return cm.listener.Addr().(*net.TCPAddr).Port
 }

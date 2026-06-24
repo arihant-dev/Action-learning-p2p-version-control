@@ -3,6 +3,7 @@ package ipc
 import (
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -21,7 +22,7 @@ type Message struct {
 type IpcServer struct {
 	socketPath string
 	listener   net.Listener
-	clients    map[net.Conn]bool
+	clients    map[net.Conn]*sync.Mutex
 	clientMu   sync.Mutex
 
 	// Callback for handling messages from C++ daemon
@@ -34,7 +35,7 @@ type IpcServer struct {
 func NewIpcServer(socketPath string) *IpcServer {
 	return &IpcServer{
 		socketPath: socketPath,
-		clients:    make(map[net.Conn]bool),
+		clients:    make(map[net.Conn]*sync.Mutex),
 		ToC:        make(chan *Message, 100),
 	}
 }
@@ -79,12 +80,15 @@ func (s *IpcServer) acceptConnections() {
 	for {
 		conn, err := s.listener.Accept()
 		if err != nil {
+			if errors.Is(err, net.ErrClosed) {
+				return
+			}
 			fmt.Printf("Error accepting connection: %v\n", err)
 			continue
 		}
 
 		s.clientMu.Lock()
-		s.clients[conn] = true
+		s.clients[conn] = &sync.Mutex{}
 		s.clientMu.Unlock()
 
 		fmt.Printf("C++ daemon connected from: %s\n", conn.RemoteAddr())
@@ -126,8 +130,12 @@ func (s *IpcServer) handleClient(conn net.Conn) {
 func (s *IpcServer) handleOutgoingMessages() {
 	for msg := range s.ToC {
 		s.clientMu.Lock()
-		for conn := range s.clients {
-			go WriteMessage(conn, msg)
+		for conn, mu := range s.clients {
+			go func(c net.Conn, m *sync.Mutex) {
+				m.Lock()
+				defer m.Unlock()
+				_ = WriteMessage(c, msg)
+			}(conn, mu)
 		}
 		s.clientMu.Unlock()
 	}
