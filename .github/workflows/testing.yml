@@ -1,4 +1,4 @@
-name: Build Testing
+name: Build-Testing
 
 on:
   push:
@@ -6,29 +6,29 @@ on:
       - master
 
 jobs:
-  CMake testing:
+  cmake-testing:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout source
+      - name: checkout-source
         uses: actions/checkout@v4
 
-      - name: CMake configure
+      - name: cmake-configure
         working-directory: src/backend/cpp
         run: |
           cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=Release
 
-      - name: CMake build
+      - name: cmake-build
         working-directory: src/backend/cpp
         run: |
           cmake --build build --config Release --parallel
 
-      - name: Run CMake tests
+      - name: run-cmake-tests
         working-directory: src/backend/cpp/build
         run: ctest --output-on-failure
 
-  Go testing:
+  go-testing:
     runs-on: ubuntu-latest
 
     defaults:
@@ -36,17 +36,17 @@ jobs:
         working-directory: src/backend/go
 
     steps:
-      - name: Checkout source
+      - name: checkout-source
         uses: actions/checkout@v4
 
-      - name: Setup Go
+      - name: setup-go
         uses: actions/setup-go@v5
         with:
           go-version-file: src/backend/go/go.mod
           cache: true
 
-      - name: Build Go
+      - name: build-go
         run: go build ./...
 
-      - name: Test Go
+      - name: test-go
         run: go test ./...
