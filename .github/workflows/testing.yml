@@ -13,20 +13,17 @@ jobs:
       - name: checkout-source
         uses: actions/checkout@v4
 
-      - name: cmake-configure
-        working-directory: src/backend/cpp
-        run: |
-          cmake -S . -B build \
-            -DCMAKE_BUILD_TYPE=Release
-
       - name: cmake-build
         working-directory: src/backend/cpp
         run: |
-          cmake --build build --config Release --parallel
+          mkdir build
+          cd build
+          cmake ..
+          cmake --build .
 
       - name: run-cmake-tests
-        working-directory: src/backend/cpp/build
-        run: ctest --output-on-failure
+        working-directory: src/backend/cpp
+        run: ctest --test-dir build --output-on-failure
 
   go-testing:
     runs-on: ubuntu-latest
