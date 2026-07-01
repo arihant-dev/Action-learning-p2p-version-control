@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - test/go-cpp-java-coordination
 
 jobs:
   cmake-testing:
