@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"syscall"
+	"path/filepath"
 )
 
 // SyncCoordinator coordinates multi-repository synchronization across the local
@@ -122,6 +123,13 @@ func (sc *SyncCoordinator) startRepoWorkerLocked(repoID string) {
 
 		// 2. Find C++ daemon binary
 		cppExe := "./cpp_daemon"
+		if execPath, errExec := os.Executable(); errExec == nil {
+			peerCpp := filepath.Join(filepath.Dir(execPath), "cpp_daemon")
+			if _, errStat := os.Stat(peerCpp); errStat == nil {
+				cppExe = peerCpp
+			}
+		}
+
 		if _, err := os.Stat(cppExe); os.IsNotExist(err) {
 			candidates := []string{
 				"src/backend/cpp/build/bin/cpp_daemon",
@@ -129,7 +137,7 @@ func (sc *SyncCoordinator) startRepoWorkerLocked(repoID string) {
 				"build/bin/cpp_daemon",
 			}
 			for _, c := range candidates {
-				if _, err := os.Stat(c); err == nil {
+				if _, errStat := os.Stat(c); errStat == nil {
 					cppExe = c
 					break
 				}

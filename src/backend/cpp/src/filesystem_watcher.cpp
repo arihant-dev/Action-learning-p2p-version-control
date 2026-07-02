@@ -22,8 +22,8 @@ bool FileSystemWatcher::start(FileChangeCallback callback) {
             return false;
         }
 
-        // 1. Initial scan to populate the known state without notifying
-        scan_directory(false);
+        // 1. Initial scan to populate the known state and notify Go coordinator
+        scan_directory(true);
         std::cout << "[FileSystemWatcher] Initial baseline scan complete. Watching: " << watch_path_ << "\n";
 
         // 2. Start the polling thread
@@ -66,6 +66,11 @@ void FileSystemWatcher::scan_directory(bool notify) {
     for (const auto &entry : fs::recursive_directory_iterator(watch_path_)) {
         if (shutdown_) return;
 
+        // Skip symlinks to prevent scanning files outside the watch directory
+        if (entry.is_symlink()) {
+            continue;
+        }
+
         // Skip directories, only track regular files
         if (!entry.is_regular_file()) {
             continue;
@@ -76,8 +81,14 @@ void FileSystemWatcher::scan_directory(bool notify) {
             // Get relative path from watch_path_
             std::string rel_path = fs::relative(entry.path(), watch_path_).string();
 
-            // Skip hidden directories/files (like .git)
-            if (rel_path.find(".git/") == 0 || rel_path == ".git" || rel_path.find(".DS_Store") != std::string::npos) {
+            // Skip hidden files, dot-directories, python virtualenvs, node_modules, and build targets
+            if (rel_path.empty() || 
+                rel_path[0] == '.' || 
+                rel_path.find("/.") != std::string::npos || 
+                rel_path.find(".venv") != std::string::npos || 
+                rel_path.find("venv/") != std::string::npos || 
+                rel_path.find("node_modules/") != std::string::npos || 
+                rel_path.find("target/") != std::string::npos) {
                 continue;
             }
 
