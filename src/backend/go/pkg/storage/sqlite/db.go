@@ -71,6 +71,9 @@ func Open(path string) (*DB, error) {
 		return nil, fmt.Errorf("ping sqlite db: %w", err)
 	}
 
+	// Limit to 1 connection to prevent pool fragmentation in SQLite
+	conn.SetMaxOpenConns(1)
+
 	db := &DB{conn: conn}
 	if err := db.applySchema(); err != nil {
 		conn.Close()

@@ -14,6 +14,9 @@ import (
 	"p2p/pkg/storage/sqlite"
 	"p2p/pkg/transfer"
 	"p2p/pkg/versioning"
+	"os"
+	"os/exec"
+	"syscall"
 )
 
 // SyncCoordinator coordinates multi-repository synchronization across the local
@@ -107,7 +110,67 @@ func (sc *SyncCoordinator) startRepoWorkerLocked(repoID string) {
 	go func() {
 		defer sc.wg.Done()
 		log.Printf("[SyncCoordinator] Started sync worker for repo %s\n", repoID)
+
+		// 1. Fetch repository details to get watch path
+		repo, err := sc.db.Repositories().Get(repoID)
+		if err != nil || repo == nil {
+			log.Printf("[SyncCoordinator] Error: Repository %s not found in DB. Cannot start C++ daemon.\n", repoID)
+			<-stopCh
+			log.Printf("[SyncCoordinator] Stopped sync worker for repo %s\n", repoID)
+			return
+		}
+
+		// 2. Find C++ daemon binary
+		cppExe := "./cpp_daemon"
+		if _, err := os.Stat(cppExe); os.IsNotExist(err) {
+			candidates := []string{
+				"src/backend/cpp/build/bin/cpp_daemon",
+				"../cpp/build/bin/cpp_daemon",
+				"build/bin/cpp_daemon",
+			}
+			for _, c := range candidates {
+				if _, err := os.Stat(c); err == nil {
+					cppExe = c
+					break
+				}
+			}
+		}
+
+		// 3. Compile C++ daemon if missing and CMake project exists
+		if _, err := os.Stat(cppExe); os.IsNotExist(err) {
+			if _, errCmake := os.Stat("src/backend/cpp/CMakeLists.txt"); errCmake == nil {
+				log.Println("[SyncCoordinator] C++ daemon binary missing. Attempting build...")
+				_ = exec.Command("cmake", "-B", "src/backend/cpp/build", "-S", "src/backend/cpp").Run()
+				_ = exec.Command("cmake", "--build", "src/backend/cpp/build").Run()
+				if _, errStat := os.Stat("src/backend/cpp/build/bin/cpp_daemon"); errStat == nil {
+					cppExe = "src/backend/cpp/build/bin/cpp_daemon"
+				}
+			}
+		}
+
+		// 4. Start C++ daemon process
+		var cmd *exec.Cmd
+		if _, err := os.Stat(cppExe); err == nil {
+			log.Printf("[SyncCoordinator] Spawning C++ daemon: %s %s %s %s\n", cppExe, repoID, repo.LocalPath, sc.ipcServer.SocketPath())
+			cmd = exec.Command(cppExe, repoID, repo.LocalPath, sc.ipcServer.SocketPath())
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			if err := cmd.Start(); err != nil {
+				log.Printf("[SyncCoordinator] Error: Failed to start C++ daemon: %v\n", err)
+			}
+		} else {
+			log.Println("[SyncCoordinator] Warning: C++ daemon binary not found. Watcher daemon not started.")
+		}
+
 		<-stopCh
+
+		// 5. Clean up C++ daemon process
+		if cmd != nil && cmd.Process != nil {
+			log.Printf("[SyncCoordinator] Terminating C++ daemon for repo %s...\n", repoID)
+			_ = cmd.Process.Signal(syscall.SIGTERM)
+			_ = cmd.Wait()
+		}
+
 		log.Printf("[SyncCoordinator] Stopped sync worker for repo %s\n", repoID)
 	}()
 }

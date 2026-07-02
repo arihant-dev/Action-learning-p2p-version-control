@@ -24,9 +24,71 @@ public class IpcBridge {
     private final Map<String, List<MessageListener>> listeners = new ConcurrentHashMap<>();
     private Thread readThread;
     private volatile boolean running = false;
+    private Process goProcess;
 
     public interface MessageListener {
         void onMessage(JsonElement payload);
+    }
+
+    private synchronized void ensureGoCoordinatorRunning() {
+        if (goProcess != null && goProcess.isAlive()) {
+            return;
+        }
+
+        System.out.println("[Java] Ensuring Go coordinator is running...");
+
+        // 1. Try to build the Go coordinator if in development environment
+        java.io.File devGoDir = new java.io.File("src/backend/go");
+        if (devGoDir.exists() && devGoDir.isDirectory()) {
+            System.out.println("[Java] Development environment detected. Building Go coordinator...");
+            try {
+                new java.io.File("build").mkdirs();
+                ProcessBuilder pbBuild = new ProcessBuilder("go", "build", "-o", "../../../build/go_coordinator", "main.go");
+                pbBuild.directory(devGoDir);
+                Process buildProc = pbBuild.start();
+                int exitCode = buildProc.waitFor();
+                if (exitCode == 0) {
+                    System.out.println("[Java] Go coordinator built successfully.");
+                } else {
+                    System.err.println("[Java] Go compilation failed with exit code: " + exitCode);
+                }
+            } catch (Exception e) {
+                System.err.println("[Java] Error compiling Go coordinator: " + e.getMessage());
+            }
+        }
+
+        // 2. Start Go coordinator
+        try {
+            java.io.File goExe = new java.io.File("build/go_coordinator");
+            if (!goExe.exists()) {
+                goExe = new java.io.File("src/backend/go/build/go_coordinator");
+            }
+            if (!goExe.exists()) {
+                goExe = new java.io.File("go_coordinator");
+            }
+
+            if (goExe.exists()) {
+                System.out.println("[Java] Starting Go coordinator: " + goExe.getAbsolutePath());
+                ProcessBuilder pbGo = new ProcessBuilder(goExe.getAbsolutePath());
+                
+                Map<String, String> env = pbGo.environment();
+                String socketPath = "/tmp/p2p_sync.sock";
+                if (System.getenv("IPC_SOCKET") != null) {
+                    socketPath = System.getenv("IPC_SOCKET");
+                }
+                env.put("IPC_SOCKET", socketPath);
+                
+                pbGo.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+                pbGo.redirectError(ProcessBuilder.Redirect.INHERIT);
+                
+                goProcess = pbGo.start();
+                System.out.println("[Java] Go coordinator started in background.");
+            } else {
+                System.err.println("[Java] Go coordinator binary not found! Cannot start.");
+            }
+        } catch (Exception e) {
+            System.err.println("[Java] Error starting Go coordinator process: " + e.getMessage());
+        }
     }
 
     private IpcBridge() {}
@@ -40,6 +102,8 @@ public class IpcBridge {
 
     public synchronized void connect() {
         if (running) return;
+
+        ensureGoCoordinatorRunning();
 
         running = true;
         readThread = new Thread(this::connectionLoop, "IPC-Reader-Thread");
@@ -204,5 +268,14 @@ public class IpcBridge {
             }
         } catch (IOException ignored) {}
         socketChannel = null;
+
+        if (goProcess != null && goProcess.isAlive()) {
+            System.out.println("[Java] Terminating Go coordinator process...");
+            goProcess.destroy();
+            try {
+                goProcess.waitFor();
+            } catch (InterruptedException ignored) {}
+            goProcess = null;
+        }
     }
 }

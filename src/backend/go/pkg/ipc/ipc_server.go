@@ -40,6 +40,10 @@ func NewIpcServer(socketPath string) *IpcServer {
 	}
 }
 
+func (s *IpcServer) SocketPath() string {
+	return s.socketPath
+}
+
 func (s *IpcServer) Start() error {
 	var listener net.Listener
 	var err error
