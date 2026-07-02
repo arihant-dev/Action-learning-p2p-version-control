@@ -238,6 +238,11 @@ func (sc *SyncCoordinator) HandleLocalFileChanged(repoID string, payload *protoc
 	var currentVersion uint64 = 0
 	if err == nil && existing != nil {
 		currentVersion = uint64(existing.Version)
+		// Ignore redundant file change notifications that match the recorded db state (e.g. from sync downloads)
+		if existing.Hash == payload.Hash && existing.IsDeleted == (payload.Action == "delete") {
+			log.Printf("[SyncCoordinator] Ignoring redundant file change for: %s (hash matches db)\n", payload.Path)
+			return nil
+		}
 	}
 
 	// 2. Monotonically tick version
@@ -371,6 +376,20 @@ func (sc *SyncCoordinator) HandlePeerMetadataUpdate(peerID string, repoID string
 			delMsg.Payload, _ = json.Marshal(payload)
 			sc.ipcServer.SendMessage(delMsg)
 		} else {
+			// Save remote metadata to SQLite DB first to prevent feedback loops on download completion
+			meta := sqlite.FileMetadata{
+				RepositoryID:      repoID,
+				Filepath:          path,
+				Hash:              hash,
+				Size:              size,
+				Version:           int64(version),
+				LocalLastModified: modifiedTime,
+				IsDeleted:         false,
+				UpdatedAt:         time.Now().Unix(),
+				Mode:              mode,
+			}
+			_ = sc.db.Metadata().Save(&meta)
+
 			// Push download task
 			task := &SyncTask{
 				RepoID:    repoID,
