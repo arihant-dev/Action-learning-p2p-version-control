@@ -25,6 +25,41 @@ void print_usage(const char *program_name) {
     std::cout << "Example: " << program_name << " project-alpha /Users/arihant/sync /tmp/p2p_sync.sock\n";
 }
 
+void handle_ipc_message(const nlohmann::json &msg, const std::string &watch_path) {
+    (void)watch_path;
+    try {
+        std::string msg_type = msg.value("type", "");
+        std::cout << "[C++ Daemon] Received IPC message: " << msg_type << "\n";
+        
+        if (msg_type == "prepare_file_transfer") {
+            auto payload = msg.at("payload");
+            std::string transfer_id = payload.value("transfer_id", "");
+            std::string path = payload.value("path", "");
+            std::string peer_id = payload.value("peer_id", "");
+            int transfer_port = payload.value("transfer_port", 0);
+            std::string expected_hash = payload.value("expected_hash", "");
+            long long expected_size = payload.value("expected_size", 0LL);
+            std::string direction = payload.value("direction", "download");
+
+            (void)expected_size;
+
+            std::cout << "[C++ Daemon] Handled prepare_file_transfer: ID=" << transfer_id 
+                      << ", path=" << path << ", port=" << transfer_port 
+                      << ", dir=" << direction << "\n";
+        } 
+        else if (msg_type == "sync_from_peer") {
+            auto payload = msg.at("payload");
+            std::string path = payload.value("path", "");
+            bool is_delete = payload.value("is_delete", false);
+
+            std::cout << "[C++ Daemon] Handled sync_from_peer: path=" << path 
+                      << ", is_delete=" << is_delete << "\n";
+        }
+    } catch (const std::exception &e) {
+        std::cerr << "[C++ Daemon] Error handling IPC message: " << e.what() << "\n";
+    }
+}
+
 int main(int argc, char *argv[]) {
     if (argc < 2) {
         print_usage(argv[0]);
@@ -74,18 +109,27 @@ int main(int argc, char *argv[]) {
     // Initialize IPC Client
     ipc::IpcClient ipc_client;
     
-    // Connect in a background thread so the daemon can start watching immediately
-    // even if the Go coordinator is not yet running
+    // Connect and read messages in a background thread so the daemon can start watching
+    // immediately and handle incoming messages when connected
     std::thread ipc_thread([&]() {
-        std::cout << "[C++ Daemon] Background IPC connection worker started...\n";
+        std::cout << "[C++ Daemon] Background IPC worker started...\n";
         while (!g_shutdown) {
             if (!ipc_client.is_connected()) {
-                ipc_client.connect(ipc_socket);
+                if (!ipc_client.connect(ipc_socket)) {
+                    std::this_thread::sleep_for(std::chrono::seconds(2));
+                    continue;
+                }
             }
-            if (ipc_client.is_connected()) {
-                std::this_thread::sleep_for(std::chrono::seconds(1));
-            } else {
-                std::this_thread::sleep_for(std::chrono::seconds(2));
+
+            // Connection succeeded, enter read loop
+            while (ipc_client.is_connected() && !g_shutdown) {
+                nlohmann::json message;
+                if (ipc_client.read_message(message)) {
+                    handle_ipc_message(message, watch_path);
+                } else {
+                    // read_message disconnects on EOF/error
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
             }
         }
     });

@@ -76,4 +76,46 @@ bool IpcClient::send_message(const nlohmann::json &message) {
     return true;
 }
 
+bool IpcClient::read_message(nlohmann::json &message) {
+    if (socket_fd_ < 0) {
+        return false;
+    }
+
+    // Read 4-byte length prefix
+    uint32_t net_len = 0;
+    ssize_t read_bytes = ::read(socket_fd_, &net_len, 4);
+    if (read_bytes <= 0) {
+        disconnect();
+        return false;
+    }
+    if (read_bytes != 4) {
+        std::cerr << "[IpcClient] Error: Incomplete length prefix read\n";
+        disconnect();
+        return false;
+    }
+
+    uint32_t len = ntohl(net_len);
+
+    // Read payload
+    std::string payload(len, '\0');
+    size_t total_read = 0;
+    while (total_read < len) {
+        ssize_t n = ::read(socket_fd_, &payload[total_read], len - total_read);
+        if (n <= 0) {
+            std::cerr << "[IpcClient] Error: Failed to read payload\n";
+            disconnect();
+            return false;
+        }
+        total_read += n;
+    }
+
+    try {
+        message = nlohmann::json::parse(payload);
+        return true;
+    } catch (const std::exception &e) {
+        std::cerr << "[IpcClient] Error parsing JSON payload: " << e.what() << "\n";
+        return false;
+    }
+}
+
 } // namespace ipc
