@@ -47,7 +47,7 @@ void handle_ipc_message(const nlohmann::json &msg, const std::string &watch_path
 
             // Spawn background thread to perform transfer
             std::thread([=]() {
-                transfer::handle_file_transfer(watch_path, path, transfer_port, direction, expected_size);
+                transfer::handle_file_transfer(watch_path, path, transfer_port, direction, expected_size, expected_hash);
             }).detach();
         } 
         else if (msg_type == "sync_from_peer") {
@@ -57,6 +57,18 @@ void handle_ipc_message(const nlohmann::json &msg, const std::string &watch_path
 
             std::cout << "[C++ Daemon] Handled sync_from_peer: path=" << path 
                       << ", is_delete=" << is_delete << "\n";
+
+            if (is_delete) {
+                fs::path target_path = fs::path(watch_path) / path;
+                try {
+                    if (fs::exists(target_path)) {
+                        fs::remove(target_path);
+                        std::cout << "[C++ Daemon] Deleted file locally: " << target_path << "\n";
+                    }
+                } catch (const std::exception &e) {
+                    std::cerr << "[C++ Daemon] Error deleting file: " << e.what() << "\n";
+                }
+            }
         }
     } catch (const std::exception &e) {
         std::cerr << "[C++ Daemon] Error handling IPC message: " << e.what() << "\n";

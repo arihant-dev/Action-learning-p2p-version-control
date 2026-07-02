@@ -1,4 +1,5 @@
 #include "file_transfer.h"
+#include "sha256.h"
 
 #include <iostream>
 #include <fstream>
@@ -18,7 +19,8 @@ void handle_file_transfer(
     const std::string &rel_path,
     int port,
     const std::string &direction,
-    long long expected_size
+    long long expected_size,
+    const std::string &expected_hash
 ) {
     std::cout << "[C++ Daemon] Starting file transfer. Path: " << rel_path 
               << ", Port: " << port << ", Direction: " << direction << "\n";
@@ -53,13 +55,14 @@ void handle_file_transfer(
     fs::path dest_path = fs::path(watch_path) / rel_path;
 
     if (direction == "download") {
+        fs::path tmp_path = dest_path.string() + ".tmp";
         try {
             // Ensure parent directories exist
             fs::create_directories(dest_path.parent_path());
 
-            std::ofstream outfile(dest_path, std::ios::binary);
+            std::ofstream outfile(tmp_path, std::ios::binary);
             if (!outfile) {
-                std::cerr << "[C++ Daemon] Error: Failed to open output file: " << dest_path << "\n";
+                std::cerr << "[C++ Daemon] Error: Failed to open temp output file: " << tmp_path << "\n";
                 ::close(sock_fd);
                 return;
             }
@@ -85,9 +88,35 @@ void handle_file_transfer(
             }
 
             outfile.close();
-            std::cout << "[C++ Daemon] Download completed. Received " << total_received << " bytes for " << rel_path << "\n";
+
+            if (total_received != expected_size && expected_size > 0) {
+                std::cerr << "[C++ Daemon] Error: Downloaded size mismatch (got " << total_received 
+                          << ", expected " << expected_size << "). Aborting.\n";
+                fs::remove(tmp_path);
+                ::close(sock_fd);
+                return;
+            }
+
+            // Verify hash if expected_hash is provided
+            if (!expected_hash.empty()) {
+                std::string actual_hash = crypto::sha256_file(tmp_path.string());
+                if (actual_hash != expected_hash) {
+                    std::cerr << "[C++ Daemon] Error: Downloaded hash mismatch for " << rel_path 
+                              << " (got " << actual_hash << ", expected " << expected_hash << "). Aborting.\n";
+                    fs::remove(tmp_path);
+                    ::close(sock_fd);
+                    return;
+                }
+            }
+
+            // Atomic rename to replace the target file
+            fs::rename(tmp_path, dest_path);
+            std::cout << "[C++ Daemon] Download completed atomically. Target: " << dest_path << "\n";
         } catch (const std::exception &e) {
             std::cerr << "[C++ Daemon] Exception during download: " << e.what() << "\n";
+            if (fs::exists(tmp_path)) {
+                fs::remove(tmp_path);
+            }
         }
     } 
     else if (direction == "upload") {
