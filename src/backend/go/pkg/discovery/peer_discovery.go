@@ -109,6 +109,25 @@ func (pr *PeerRegistry) handlePeerDiscovered(entry *zeroconf.ServiceEntry) {
 	}
 }
 
+func (pr *PeerRegistry) AddManualPeer(id, address string, port int) {
+	peer := &Peer{
+		ID:       id,
+		Name:     id,
+		Address:  address,
+		Port:     port,
+		LastSeen: time.Now(),
+	}
+	pr.mu.Lock()
+	if _, exists := pr.peers[peer.ID]; !exists {
+		pr.peers[peer.ID] = peer
+		if pr.OnPeerDiscovered != nil {
+			go pr.OnPeerDiscovered(peer)
+		}
+		log.Printf("Manual peer added: %s (%s:%d)\n", peer.Name, peer.Address, peer.Port)
+	}
+	pr.mu.Unlock()
+}
+
 func (pr *PeerRegistry) GetPeers() []*Peer {
 	pr.mu.RLock()
 	defer pr.mu.RUnlock()
