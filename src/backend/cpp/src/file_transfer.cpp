@@ -9,6 +9,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <cstring>
+#include <cerrno>
 
 namespace fs = std::filesystem;
 
@@ -51,7 +52,21 @@ void handle_file_transfer(
         return;
     }
 
+    // Set socket timeouts (30s) so read()/write() can't hang forever
+    struct timeval sock_timeout;
+    sock_timeout.tv_sec = 30;
+    sock_timeout.tv_usec = 0;
+    ::setsockopt(sock_fd, SOL_SOCKET, SO_RCVTIMEO, &sock_timeout, sizeof(sock_timeout));
+    ::setsockopt(sock_fd, SOL_SOCKET, SO_SNDTIMEO, &sock_timeout, sizeof(sock_timeout));
+
     std::cout << "[C++ Daemon] Connected to transfer socket at port " << port << "\n";
+
+    // Validate expected_size to prevent infinite loops
+    if (expected_size <= 0) {
+        std::cerr << "[C++ Daemon] Error: Invalid expected_size " << expected_size << " for " << direction << "\n";
+        ::close(sock_fd);
+        return;
+    }
 
     fs::path dest_path = fs::path(watch_path) / rel_path;
 
@@ -70,27 +85,35 @@ void handle_file_transfer(
 
             char buffer[4096];
             long long total_received = 0;
-            while (total_received < expected_size || expected_size <= 0) {
-                long long to_read = (expected_size > 0) ? std::min(4096LL, expected_size - total_received) : 4096LL;
-                if (to_read == 0) break;
+            while (total_received < expected_size) {
+                long long to_read = std::min(4096LL, expected_size - total_received);
+                if (to_read <= 0) break;
 
                 ssize_t n = ::read(sock_fd, buffer, to_read);
                 if (n < 0) {
-                    std::cerr << "[C++ Daemon] Error: Socket read error during download\n";
+                    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                        std::cerr << "[C++ Daemon] Error: Socket read timeout during download\n";
+                    } else {
+                        std::cerr << "[C++ Daemon] Error: Socket read error during download: " << errno << "\n";
+                    }
                     break;
                 }
                 if (n == 0) {
-                    // EOF reached
+                    // EOF reached before expected_size
                     break;
                 }
 
                 outfile.write(buffer, n);
+                if (outfile.fail()) {
+                    std::cerr << "[C++ Daemon] Error: Write failed to temp file: " << tmp_path << "\n";
+                    break;
+                }
                 total_received += n;
             }
 
             outfile.close();
 
-            if (total_received != expected_size && expected_size > 0) {
+            if (total_received != expected_size) {
                 std::cerr << "[C++ Daemon] Error: Downloaded size mismatch (got " << total_received 
                           << ", expected " << expected_size << "). Aborting.\n";
                 fs::remove(tmp_path);
@@ -148,20 +171,26 @@ void handle_file_transfer(
 
             char buffer[4096];
             long long total_sent = 0;
-            while (infile && (total_sent < expected_size || expected_size <= 0)) {
-                infile.read(buffer, sizeof(buffer));
-                ssize_t bytes_to_send = infile.gcount();
+            while (total_sent < expected_size) {
+                long long to_read = std::min(4096LL, expected_size - total_sent);
+                infile.read(buffer, to_read);
+                ssize_t bytes_to_send = static_cast<ssize_t>(infile.gcount());
                 if (bytes_to_send <= 0) break;
 
                 ssize_t written = 0;
                 while (written < bytes_to_send) {
                     ssize_t n = ::write(sock_fd, buffer + written, bytes_to_send - written);
-                    if (n <= 0) {
-                        std::cerr << "[C++ Daemon] Error: Socket write error during upload\n";
+                    if (n < 0) {
+                        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                            std::cerr << "[C++ Daemon] Error: Socket write timeout during upload\n";
+                        } else {
+                            std::cerr << "[C++ Daemon] Error: Socket write error during upload: " << errno << "\n";
+                        }
                         break;
                     }
                     written += n;
                 }
+                if (written < bytes_to_send) break; // break outer loop on write error
                 total_sent += written;
             }
 
