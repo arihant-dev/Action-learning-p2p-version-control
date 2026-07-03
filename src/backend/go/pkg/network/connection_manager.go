@@ -276,7 +276,7 @@ func (cm *ConnectionManager) RemoveTarget(peerID string) {
 }
 
 func (cm *ConnectionManager) readLoop(peerID string, conn net.Conn) {
-	defer cm.CloseConnection(peerID)
+	defer cm.closeConnectionIfMatch(peerID, conn)
 
 	for {
 		msg, err := ipc.ReadMessage(conn)
@@ -323,6 +323,27 @@ func (cm *ConnectionManager) CloseConnection(peerID string) {
 	defer cm.mu.Unlock()
 
 	if conn, exists := cm.connections[peerID]; exists {
+		conn.Close()
+		delete(cm.connections, peerID)
+		delete(cm.writeMus, peerID)
+		delete(cm.lastSeen, peerID)
+		log.Printf("Disconnected from peer: %s\n", peerID)
+
+		if cm.OnDisconnected != nil {
+			go cm.OnDisconnected(peerID)
+		}
+	}
+}
+
+// closeConnectionIfMatch only closes the connection if it matches the stored
+// connection for that peerID. This prevents a readLoop from a stale connection
+// from closing a newer, valid connection that replaced it (e.g. during
+// simultaneous mutual discovery where both peers dial each other).
+func (cm *ConnectionManager) closeConnectionIfMatch(peerID string, conn net.Conn) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
+	if stored, ok := cm.connections[peerID]; ok && stored == conn {
 		conn.Close()
 		delete(cm.connections, peerID)
 		delete(cm.writeMus, peerID)
