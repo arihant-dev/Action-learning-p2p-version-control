@@ -30,6 +30,10 @@ type IpcServer struct {
 
 	// Channel for sending messages to C++ daemon
 	ToC chan *Message
+
+	// Protects against send-on-closed-channel during shutdown
+	stopChan chan struct{}
+	stopOnce sync.Once
 }
 
 func NewIpcServer(socketPath string) *IpcServer {
@@ -37,6 +41,7 @@ func NewIpcServer(socketPath string) *IpcServer {
 		socketPath: socketPath,
 		clients:    make(map[net.Conn]*sync.Mutex),
 		ToC:        make(chan *Message, 100),
+		stopChan:   make(chan struct{}),
 	}
 }
 
@@ -132,21 +137,31 @@ func (s *IpcServer) handleClient(conn net.Conn) {
 }
 
 func (s *IpcServer) handleOutgoingMessages() {
-	for msg := range s.ToC {
-		s.clientMu.Lock()
-		for conn, mu := range s.clients {
-			go func(c net.Conn, m *sync.Mutex) {
-				m.Lock()
-				defer m.Unlock()
-				_ = WriteMessage(c, msg)
-			}(conn, mu)
+	for {
+		select {
+		case <-s.stopChan:
+			return
+		case msg, ok := <-s.ToC:
+			if !ok {
+				return
+			}
+			s.clientMu.Lock()
+			for conn, mu := range s.clients {
+				go func(c net.Conn, m *sync.Mutex) {
+					m.Lock()
+					defer m.Unlock()
+					_ = WriteMessage(c, msg)
+				}(conn, mu)
+			}
+			s.clientMu.Unlock()
 		}
-		s.clientMu.Unlock()
 	}
 }
 
 func (s *IpcServer) SendMessage(msg *Message) {
 	select {
+	case <-s.stopChan:
+		// Server is shutting down, drop message
 	case s.ToC <- msg:
 	default:
 		fmt.Println("Warning: IPC message queue full, dropping message")
@@ -154,6 +169,10 @@ func (s *IpcServer) SendMessage(msg *Message) {
 }
 
 func (s *IpcServer) Stop() {
+	s.stopOnce.Do(func() {
+		close(s.stopChan)
+	})
+
 	s.clientMu.Lock()
 	for conn := range s.clients {
 		conn.Close()
