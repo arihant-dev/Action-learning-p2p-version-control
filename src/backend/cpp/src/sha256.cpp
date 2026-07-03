@@ -74,12 +74,31 @@ public:
     }
 
     void update(const uint8_t *data, size_t len) {
-        for (size_t i = 0; i < len; ++i) {
-            buffer[bit_count / 8 % 64] = data[i];
-            bit_count += 8;
-            if (bit_count % 512 == 0) {
+        size_t offset = 0;
+        // Handle partial block from previous call
+        size_t buf_off = (bit_count / 8) % 64;
+        if (buf_off > 0) {
+            size_t to_copy = std::min(len, 64 - buf_off);
+            std::memcpy(buffer + buf_off, data, to_copy);
+            bit_count += to_copy * 8;
+            offset += to_copy;
+            if (buf_off + to_copy == 64) {
                 transform(buffer);
+            } else {
+                return; // Still not enough for a full block
             }
+        }
+        // Process full 64-byte blocks in bulk
+        while (offset + 64 <= len) {
+            std::memcpy(buffer, data + offset, 64);
+            bit_count += 512;
+            transform(buffer);
+            offset += 64;
+        }
+        // Store remaining bytes for next call
+        if (offset < len) {
+            std::memcpy(buffer, data + offset, len - offset);
+            bit_count += (len - offset) * 8;
         }
     }
 

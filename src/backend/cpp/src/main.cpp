@@ -11,13 +11,16 @@
 #include <string>
 #include <thread>
 #include <chrono>
+#include <unistd.h>
 
 namespace fs = std::filesystem;
 
 std::atomic<bool> g_shutdown(false);
 
-void signal_handler(int signal) {
-    std::cout << "\n[C++ Daemon] Received signal: " << signal << ", shutting down...\n";
+void signal_handler(int /*signal*/) {
+    // Only async-signal-safe operations here: write() to stderr, no cout/mutex
+    const char msg[] = "\n[C++ Daemon] Received signal, shutting down...\n";
+    ::write(STDERR_FILENO, msg, sizeof(msg) - 1);
     g_shutdown = true;
 }
 
@@ -121,6 +124,7 @@ int main(int argc, char *argv[]) {
     // Setup signal handlers
     std::signal(SIGINT, signal_handler);
     std::signal(SIGTERM, signal_handler);
+    std::signal(SIGPIPE, SIG_IGN); // Prevent termination on write to closed socket
 
     // Initialize IPC Client
     ipc::IpcClient ipc_client;
@@ -178,9 +182,7 @@ int main(int argc, char *argv[]) {
                 hash = crypto::sha256_file(abs_path.string());
                 
                 auto write_time = fs::last_write_time(abs_path);
-                auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
-                    write_time - fs::file_time_type::clock::now() + std::chrono::system_clock::now()
-                );
+                auto sctp = std::chrono::file_clock::to_sys(write_time);
                 modified_time = std::chrono::duration_cast<std::chrono::seconds>(sctp.time_since_epoch()).count();
 
                 // Get file permissions mode

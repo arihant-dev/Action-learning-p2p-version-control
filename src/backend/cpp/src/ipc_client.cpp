@@ -6,8 +6,42 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <cstring>
+#include <cerrno>
 
 namespace ipc {
+
+// Helper: read exactly 'count' bytes from a socket fd (handle short reads)
+static bool read_full(int fd, void *buf, size_t count) {
+    auto *ptr = static_cast<char *>(buf);
+    size_t remaining = count;
+    while (remaining > 0) {
+        ssize_t n = ::read(fd, ptr, remaining);
+        if (n <= 0) {
+            return false;
+        }
+        ptr += n;
+        remaining -= static_cast<size_t>(n);
+    }
+    return true;
+}
+
+// Helper: write exactly 'count' bytes to a socket fd (handle short writes)
+static bool write_full(int fd, const void *buf, size_t count) {
+    auto *ptr = static_cast<const char *>(buf);
+    size_t remaining = count;
+    while (remaining > 0) {
+        ssize_t n = ::write(fd, ptr, remaining);
+        if (n <= 0) {
+            return false;
+        }
+        ptr += n;
+        remaining -= static_cast<size_t>(n);
+    }
+    return true;
+}
+
+// Max message size (must match Go side: 1MB)
+static const uint32_t MAX_MESSAGE_SIZE = 1024 * 1024;
 
 IpcClient::IpcClient() : socket_fd_(-1) {}
 
@@ -15,8 +49,17 @@ IpcClient::~IpcClient() {
     disconnect();
 }
 
+bool IpcClient::is_connected() {
+    std::lock_guard<std::mutex> lock(mtx_);
+    return socket_fd_ >= 0;
+}
+
 bool IpcClient::connect(const std::string &socket_path) {
-    disconnect();
+    std::lock_guard<std::mutex> lock(mtx_);
+    if (socket_fd_ >= 0) {
+        ::close(socket_fd_);
+        socket_fd_ = -1;
+    }
 
     socket_fd_ = ::socket(AF_UNIX, SOCK_STREAM, 0);
     if (socket_fd_ < 0) {
@@ -41,6 +84,7 @@ bool IpcClient::connect(const std::string &socket_path) {
 }
 
 void IpcClient::disconnect() {
+    std::lock_guard<std::mutex> lock(mtx_);
     if (socket_fd_ >= 0) {
         ::close(socket_fd_);
         socket_fd_ = -1;
@@ -49,6 +93,7 @@ void IpcClient::disconnect() {
 }
 
 bool IpcClient::send_message(const nlohmann::json &message) {
+    std::lock_guard<std::mutex> lock(mtx_);
     if (socket_fd_ < 0) {
         std::cerr << "[IpcClient] Error: Not connected\n";
         return false;
@@ -56,20 +101,19 @@ bool IpcClient::send_message(const nlohmann::json &message) {
 
     std::string data = message.dump();
     uint32_t len = data.size();
-    uint32_t net_len = htonl(len); // convert to big-endian
+    uint32_t net_len = htonl(len);
 
-    // Write length prefix
-    if (::write(socket_fd_, &net_len, 4) != 4) {
+    if (!write_full(socket_fd_, &net_len, 4)) {
         std::cerr << "[IpcClient] Error: Failed to write length prefix\n";
-        disconnect();
+        ::close(socket_fd_);
+        socket_fd_ = -1;
         return false;
     }
 
-    // Write JSON payload
-    ssize_t written = ::write(socket_fd_, data.data(), data.size());
-    if (written != static_cast<ssize_t>(data.size())) {
+    if (!write_full(socket_fd_, data.data(), data.size())) {
         std::cerr << "[IpcClient] Error: Failed to write complete payload\n";
-        disconnect();
+        ::close(socket_fd_);
+        socket_fd_ = -1;
         return false;
     }
 
@@ -77,36 +121,33 @@ bool IpcClient::send_message(const nlohmann::json &message) {
 }
 
 bool IpcClient::read_message(nlohmann::json &message) {
+    std::lock_guard<std::mutex> lock(mtx_);
     if (socket_fd_ < 0) {
         return false;
     }
 
-    // Read 4-byte length prefix
     uint32_t net_len = 0;
-    ssize_t read_bytes = ::read(socket_fd_, &net_len, 4);
-    if (read_bytes <= 0) {
-        disconnect();
-        return false;
-    }
-    if (read_bytes != 4) {
-        std::cerr << "[IpcClient] Error: Incomplete length prefix read\n";
-        disconnect();
+    if (!read_full(socket_fd_, &net_len, 4)) {
+        ::close(socket_fd_);
+        socket_fd_ = -1;
         return false;
     }
 
     uint32_t len = ntohl(net_len);
 
-    // Read payload
+    if (len > MAX_MESSAGE_SIZE) {
+        std::cerr << "[IpcClient] Error: Message too large: " << len << " bytes (max " << MAX_MESSAGE_SIZE << ")\n";
+        ::close(socket_fd_);
+        socket_fd_ = -1;
+        return false;
+    }
+
     std::string payload(len, '\0');
-    size_t total_read = 0;
-    while (total_read < len) {
-        ssize_t n = ::read(socket_fd_, &payload[total_read], len - total_read);
-        if (n <= 0) {
-            std::cerr << "[IpcClient] Error: Failed to read payload\n";
-            disconnect();
-            return false;
-        }
-        total_read += n;
+    if (!read_full(socket_fd_, &payload[0], len)) {
+        std::cerr << "[IpcClient] Error: Failed to read payload\n";
+        ::close(socket_fd_);
+        socket_fd_ = -1;
+        return false;
     }
 
     try {
