@@ -23,6 +23,7 @@ type SyncTask struct {
 	Size      int64
 	Timestamp time.Time
 	PeerID    string // Target peer to sync with
+	Mode      uint32
 }
 
 // Priority computes the priority of a task (lower values mean higher priority).

@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.TextArea?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.ColumnConstraints?>
+<?import javafx.scene.layout.GridPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.RowConstraints?>
+<?import javafx.scene.layout.VBox?>
+
+
+<BorderPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="org.codehaus.mojo.frontendtest.RepoStatusController"
+            prefWidth="600" prefHeight="450"
+            styleClass="root">
+
+    <!-- Title bar -->
+    <top>
+        <Label fx:id="repoNameLabel" text="Repository name" maxWidth="Infinity"
+               styleClass="title-label"
+               style="-fx-border-color: #334155; -fx-border-width: 0 0 1 0; -fx-padding: 12 15 12 15;"/>
+    </top>
+
+    <center>
+        <GridPane>
+            <columnConstraints>
+                <ColumnConstraints percentWidth="50"/>
+                <ColumnConstraints percentWidth="50"/>
+            </columnConstraints>
+            <rowConstraints>
+                <RowConstraints vgrow="ALWAYS"/>
+            </rowConstraints>
+
+            <!-- Left panel -->
+            <VBox GridPane.columnIndex="0" GridPane.rowIndex="0"
+                  style="-fx-border-color: #334155; -fx-border-width: 0 1 0 0; -fx-padding: 10;">
+                <Label text="Files in Repository" styleClass="section-label"/>
+                <ListView fx:id="filesListView" VBox.vgrow="ALWAYS"
+                          style="-fx-background-color: transparent;"/>
+            </VBox>
+
+            <!-- Right panel -->
+            <VBox GridPane.columnIndex="1" GridPane.rowIndex="0"
+                  style="-fx-padding: 10;">
+                <Label text="Sync Log / Events" styleClass="section-label"/>
+                <TextArea fx:id="changesTextArea" editable="false" wrapText="true"
+                          VBox.vgrow="ALWAYS"/>
+            </VBox>
+        </GridPane>
+    </center>
+
+    <!-- Bottom status bar -->
+    <bottom>
+        <HBox alignment="CENTER_LEFT"
+              style="-fx-border-color: #334155; -fx-border-width: 1 0 0 0; -fx-background-color: #1e293b;">
+            <Label fx:id="syncStatusLabel" text="sync status: Initializing"
+                   style="-fx-padding: 8 12 8 12; -fx-border-color: #334155; -fx-border-width: 0 1 0 0; -fx-text-fill: #94a3b8;"  HBox.hgrow="ALWAYS"  maxWidth="Infinity"/>
+            <Label fx:id="peersLabel" text="peers: 0"
+                   style="-fx-padding: 8 12 8 12; -fx-border-color: #334155; -fx-border-width: 0 1 0 0; -fx-text-fill: #94a3b8;"   HBox.hgrow="ALWAYS"  maxWidth="Infinity"/>
+            <Label fx:id="onlineStatusLabel" text="Offline"
+                   style="-fx-padding: 8 12 8 12; -fx-text-fill: #ef4444; -fx-font-weight: bold;"  HBox.hgrow="ALWAYS"  maxWidth="Infinity"/>
+        </HBox>
+    </bottom>
+
+</BorderPane>

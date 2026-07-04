@@ -14,6 +14,10 @@ import (
 	"p2p/pkg/storage/sqlite"
 	"p2p/pkg/transfer"
 	"p2p/pkg/versioning"
+	"os"
+	"os/exec"
+	"syscall"
+	"path/filepath"
 )
 
 // SyncCoordinator coordinates multi-repository synchronization across the local
@@ -21,6 +25,7 @@ import (
 type pendingDownload struct {
 	size   int64
 	repoID string
+	mode   uint32
 }
 
 type SyncCoordinator struct {
@@ -37,6 +42,8 @@ type SyncCoordinator struct {
 	stopChan         chan struct{}
 	wg               sync.WaitGroup
 	pendingDownloads map[string]pendingDownload // path:hash -> pendingDetails
+	lamportClock     *versioning.LamportClock
+	vectorClock      *versioning.VectorClock
 }
 
 // NewSyncCoordinator creates a new SyncCoordinator.
@@ -58,6 +65,8 @@ func NewSyncCoordinator(
 		concurrencySem:   make(chan struct{}, 4), // Max 4 concurrent uploads/downloads
 		stopChan:         make(chan struct{}),
 		pendingDownloads: make(map[string]pendingDownload),
+		lamportClock:     versioning.NewLamportClock(),
+		vectorClock:      versioning.NewVectorClock(),
 	}
 }
 
@@ -106,7 +115,98 @@ func (sc *SyncCoordinator) startRepoWorkerLocked(repoID string) {
 	go func() {
 		defer sc.wg.Done()
 		log.Printf("[SyncCoordinator] Started sync worker for repo %s\n", repoID)
+
+		// 1. Fetch repository details to get watch path
+		repo, err := sc.db.Repositories().Get(repoID)
+		if err != nil || repo == nil {
+			log.Printf("[SyncCoordinator] Error: Repository %s not found in DB. Cannot start C++ daemon.\n", repoID)
+			<-stopCh
+			log.Printf("[SyncCoordinator] Stopped sync worker for repo %s\n", repoID)
+			return
+		}
+
+		// 2. Find C++ daemon binary
+		cppExe := "./cpp_daemon"
+		if execPath, errExec := os.Executable(); errExec == nil {
+			peerCpp := filepath.Join(filepath.Dir(execPath), "cpp_daemon")
+			if _, errStat := os.Stat(peerCpp); errStat == nil {
+				cppExe = peerCpp
+			}
+		}
+
+		if _, err := os.Stat(cppExe); os.IsNotExist(err) {
+			candidates := []string{
+				"src/backend/cpp/build/bin/cpp_daemon",
+				"../cpp/build/bin/cpp_daemon",
+				"build/bin/cpp_daemon",
+			}
+			for _, c := range candidates {
+				if _, errStat := os.Stat(c); errStat == nil {
+					cppExe = c
+					break
+				}
+			}
+		}
+
+		// 3. Compile C++ daemon if missing and CMake project exists
+		if _, err := os.Stat(cppExe); os.IsNotExist(err) {
+			if _, errCmake := os.Stat("src/backend/cpp/CMakeLists.txt"); errCmake == nil {
+				log.Println("[SyncCoordinator] C++ daemon binary missing. Attempting build...")
+				_ = exec.Command("cmake", "-B", "src/backend/cpp/build", "-S", "src/backend/cpp").Run()
+				_ = exec.Command("cmake", "--build", "src/backend/cpp/build").Run()
+				if _, errStat := os.Stat("src/backend/cpp/build/bin/cpp_daemon"); errStat == nil {
+					cppExe = "src/backend/cpp/build/bin/cpp_daemon"
+				}
+			}
+		}
+
+		// 4. Start C++ daemon process in a new process group
+		var cmd *exec.Cmd
+		if _, err := os.Stat(cppExe); err == nil {
+			log.Printf("[SyncCoordinator] Spawning C++ daemon: %s %s %s %s\n", cppExe, repoID, repo.LocalPath, sc.ipcServer.SocketPath())
+			cmd = exec.Command(cppExe, repoID, repo.LocalPath, sc.ipcServer.SocketPath())
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			// Use process group so we can kill the entire group on shutdown
+			cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+			if err := cmd.Start(); err != nil {
+				log.Printf("[SyncCoordinator] Error: Failed to start C++ daemon: %v\n", err)
+			}
+		} else {
+			log.Println("[SyncCoordinator] Warning: C++ daemon binary not found. Watcher daemon not started.")
+		}
+
 		<-stopCh
+
+		// 5. Clean up C++ daemon process (kill entire process group)
+		if cmd != nil && cmd.Process != nil {
+			log.Printf("[SyncCoordinator] Terminating C++ daemon for repo %s...\n", repoID)
+			// Try SIGTERM to the process group first
+			pgid, err := syscall.Getpgid(cmd.Process.Pid)
+			if err == nil && pgid > 0 {
+				syscall.Kill(-pgid, syscall.SIGTERM)
+			} else {
+				_ = cmd.Process.Signal(syscall.SIGTERM)
+			}
+			// Wait with timeout
+			done := make(chan struct{})
+			go func() {
+				_ = cmd.Wait()
+				close(done)
+			}()
+			select {
+			case <-done:
+			case <-time.After(3 * time.Second):
+				log.Printf("[SyncCoordinator] Force killing C++ daemon for repo %s...\n", repoID)
+				if err == nil && pgid > 0 {
+					syscall.Kill(-pgid, syscall.SIGKILL)
+				} else {
+					_ = cmd.Process.Kill()
+				}
+				_ = cmd.Wait()
+			}
+		}
+
 		log.Printf("[SyncCoordinator] Stopped sync worker for repo %s\n", repoID)
 	}()
 }
@@ -163,13 +263,17 @@ func (sc *SyncCoordinator) HandleLocalFileChanged(repoID string, payload *protoc
 
 	// 1. Fetch current database metadata
 	existing, err := sc.db.Metadata().Get(repoID, payload.Path)
-	var currentVersion uint64 = 0
 	if err == nil && existing != nil {
-		currentVersion = uint64(existing.Version)
+		// Ignore redundant file change notifications that match the recorded db state (e.g. from sync downloads)
+		if existing.Hash == payload.Hash && existing.IsDeleted == (payload.Action == "delete") {
+			log.Printf("[SyncCoordinator] Ignoring redundant file change for: %s (hash matches db)\n", payload.Path)
+			return nil
+		}
 	}
 
-	// 2. Monotonically tick version
-	nextVersion := currentVersion + 1
+	// 2. Tick Lamport clock and vector clock for causal ordering
+	nextVersion := sc.lamportClock.Tick()
+	sc.vectorClock.Tick(sc.localPeerID)
 
 	// 3. Save new metadata state to SQLite
 	meta := sqlite.FileMetadata{
@@ -181,6 +285,7 @@ func (sc *SyncCoordinator) HandleLocalFileChanged(repoID string, payload *protoc
 		LocalLastModified: payload.ModifiedTime,
 		IsDeleted:         payload.Action == "delete",
 		UpdatedAt:         time.Now().Unix(),
+		Mode:              payload.Mode,
 	}
 
 	if err := sc.db.Metadata().Save(&meta); err != nil {
@@ -214,8 +319,14 @@ func (sc *SyncCoordinator) HandleLocalFileChanged(repoID string, payload *protoc
 		"version":       nextVersion,
 		"modified_time": payload.ModifiedTime,
 		"is_deleted":    payload.Action == "delete",
+		"mode":          payload.Mode,
+		"vector_clock":  sc.vectorClock.AsMap(),
 	}
-	p2pMsg.Payload, _ = json.Marshal(updatePayload)
+	payloadBytes, err := json.Marshal(updatePayload)
+	if err != nil {
+		return fmt.Errorf("marshal metadata update: %w", err)
+	}
+	p2pMsg.Payload = payloadBytes
 
 	sc.connMgr.Broadcast(p2pMsg)
 	return nil
@@ -229,10 +340,25 @@ func (sc *SyncCoordinator) HandlePeerMetadataUpdate(peerID string, repoID string
 	verVal, _ := update["version"].(float64)
 	modTimeVal, _ := update["modified_time"].(float64)
 	isDeleted, _ := update["is_deleted"].(bool)
+	modeVal, _ := update["mode"].(float64)
+	remoteVC, _ := update["vector_clock"].(map[string]interface{})
 
 	size := int64(sizeVal)
 	version := uint64(verVal)
 	modifiedTime := int64(modTimeVal)
+	mode := uint32(modeVal)
+
+	// Merge remote clocks to preserve causal ordering
+	sc.lamportClock.Witness(version)
+	if remoteVC != nil {
+		vcMap := make(map[string]uint64, len(remoteVC))
+		for k, v := range remoteVC {
+			if fv, ok := v.(float64); ok {
+				vcMap[k] = uint64(fv)
+			}
+		}
+		sc.vectorClock.Merge(vcMap)
+	}
 
 	// 1. Get current local state
 	localMeta, err := sc.db.Metadata().Get(repoID, path)
@@ -274,6 +400,7 @@ func (sc *SyncCoordinator) HandlePeerMetadataUpdate(peerID string, repoID string
 				LocalLastModified: modifiedTime,
 				IsDeleted:         true,
 				UpdatedAt:         time.Now().Unix(),
+				Mode:              mode,
 			}
 			_ = sc.db.Metadata().Save(&meta)
 
@@ -291,9 +418,28 @@ func (sc *SyncCoordinator) HandlePeerMetadataUpdate(peerID string, repoID string
 				"hash":      hash,
 				"timestamp": modifiedTime,
 			}
-			delMsg.Payload, _ = json.Marshal(payload)
-			sc.ipcServer.SendMessage(delMsg)
+			payloadBytes, err := json.Marshal(payload)
+			if err != nil {
+				log.Printf("[SyncCoordinator] Failed to marshal delete payload: %v\n", err)
+			} else {
+				delMsg.Payload = payloadBytes
+				sc.ipcServer.SendMessage(delMsg)
+			}
 		} else {
+			// Save remote metadata to SQLite DB first to prevent feedback loops on download completion
+			meta := sqlite.FileMetadata{
+				RepositoryID:      repoID,
+				Filepath:          path,
+				Hash:              hash,
+				Size:              size,
+				Version:           int64(version),
+				LocalLastModified: modifiedTime,
+				IsDeleted:         false,
+				UpdatedAt:         time.Now().Unix(),
+				Mode:              mode,
+			}
+			_ = sc.db.Metadata().Save(&meta)
+
 			// Push download task
 			task := &SyncTask{
 				RepoID:    repoID,
@@ -303,6 +449,7 @@ func (sc *SyncCoordinator) HandlePeerMetadataUpdate(peerID string, repoID string
 				Size:      size,
 				Timestamp: time.Unix(modifiedTime, 0),
 				PeerID:    peerID,
+				Mode:      mode,
 			}
 			sc.queue.Push(task)
 		}
@@ -364,7 +511,11 @@ func (sc *SyncCoordinator) logAndNotifyConflict(repoID, path string, local, remo
 			},
 		},
 	}
-	payloadBytes, _ := json.Marshal(payload)
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("[SyncCoordinator] Failed to marshal conflict payload: %v\n", err)
+		return
+	}
 	msg.Payload = payloadBytes
 
 	sc.ipcServer.SendMessage(msg)
@@ -385,8 +536,14 @@ func (sc *SyncCoordinator) sendMetadataUpdateToPeer(peerID, repoID, path string,
 		"version":       version,
 		"modified_time": modifiedTime,
 		"is_deleted":    isDeleted,
+		"vector_clock":  sc.vectorClock.AsMap(),
 	}
-	p2pMsg.Payload, _ = json.Marshal(updatePayload)
+	payloadBytes, err := json.Marshal(updatePayload)
+	if err != nil {
+		log.Printf("[SyncCoordinator] Failed to marshal metadata update to peer %s: %v\n", peerID, err)
+		return
+	}
+	p2pMsg.Payload = payloadBytes
 
 	_ = sc.connMgr.SendToPeer(peerID, p2pMsg)
 }
@@ -441,13 +598,19 @@ func (sc *SyncCoordinator) executeSyncTask(task *SyncTask) {
 			Path: task.FilePath,
 			Hash: task.Hash,
 		}
-		reqMsg.Payload, _ = json.Marshal(reqPayload)
+		payloadBytes, err := json.Marshal(reqPayload)
+		if err != nil {
+			log.Printf("[SyncCoordinator] Failed to marshal file request: %v\n", err)
+			return
+		}
+		reqMsg.Payload = payloadBytes
 
 		// Register pending download details
 		sc.mu.Lock()
 		sc.pendingDownloads[task.FilePath+":"+task.Hash] = pendingDownload{
 			size:   task.Size,
 			repoID: task.RepoID,
+			mode:   task.Mode,
 		}
 		sc.mu.Unlock()
 
@@ -480,6 +643,9 @@ func (sc *SyncCoordinator) HandleP2PMessage(peerID string, msg *ipc.Message) err
 		var payload protocol.FileRequestPayload
 		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
 			return fmt.Errorf("unmarshal file request: %w", err)
+		}
+		if err := payload.Validate(); err != nil {
+			return fmt.Errorf("invalid file_request from peer %s: %w", peerID, err)
 		}
 
 		// Look up the file in SQLite across repos to get repositoryID and size
@@ -544,6 +710,9 @@ func (sc *SyncCoordinator) HandleP2PMessage(peerID string, msg *ipc.Message) err
 		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
 			return fmt.Errorf("unmarshal file response: %w", err)
 		}
+		if err := payload.Validate(); err != nil {
+			return fmt.Errorf("invalid file_response from peer %s: %w", peerID, err)
+		}
 
 		if payload.Error != "" {
 			log.Printf("[SyncCoordinator] Remote file request failed: %s\n", payload.Error)
@@ -577,7 +746,7 @@ func (sc *SyncCoordinator) HandleP2PMessage(peerID string, msg *ipc.Message) err
 
 		// Start download session: connect to the peer's dynamic transferPort
 		transferID := fmt.Sprintf("dl_%d_%s", time.Now().UnixNano(), pDetails.repoID)
-		err = sc.transferMgr.StartDownload(transferID, payload.Path, peerID, payload.Hash, pDetails.size, host, payload.TransferPort)
+		err = sc.transferMgr.StartDownload(transferID, payload.Path, peerID, payload.Hash, pDetails.size, host, payload.TransferPort, pDetails.mode)
 		if err != nil {
 			log.Printf("[SyncCoordinator] StartDownload failed: %v\n", err)
 		}
@@ -616,7 +785,77 @@ func (sc *SyncCoordinator) HandleIPCMessage(msg *ipc.Message) error {
 		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
 			return err
 		}
+		if err := payload.FileChangedPayload.Validate(); err != nil {
+			return fmt.Errorf("invalid file_changed payload: %w", err)
+		}
 		return sc.HandleLocalFileChanged(payload.RepoID, &payload.FileChangedPayload)
+	case "repo_list_request":
+		repos, err := sc.db.Repositories().List()
+		if err != nil {
+			return err
+		}
+		type RepoInfo struct {
+			ID   string `json:"id"`
+			Path string `json:"path"`
+		}
+		list := make([]RepoInfo, 0)
+		for _, r := range repos {
+			list = append(list, RepoInfo{ID: r.ID, Path: r.LocalPath})
+		}
+		respPayload, _ := json.Marshal(map[string]interface{}{
+			"repos": list,
+		})
+		resp := &ipc.Message{
+			Version:   "1.0",
+			Type:      "repo_list_response",
+			Source:    "go",
+			Timestamp: time.Now().UnixNano() / int64(time.Millisecond),
+			Payload:   respPayload,
+		}
+		sc.ipcServer.SendMessage(resp)
+		return nil
+
+	case "repo_status_request":
+		var payload struct {
+			RepoID string `json:"repo_id"`
+		}
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			return err
+		}
+		files, err := sc.db.Metadata().ListByRepository(payload.RepoID, false)
+		if err != nil {
+			return err
+		}
+		type FileInfo struct {
+			Path         string `json:"path"`
+			Hash         string `json:"hash"`
+			Size         int64  `json:"size"`
+			Version      int64  `json:"version"`
+			ModifiedTime int64  `json:"modified_time"`
+		}
+		list := make([]FileInfo, 0)
+		for _, f := range files {
+			list = append(list, FileInfo{
+				Path:         f.Filepath,
+				Hash:         f.Hash,
+				Size:         f.Size,
+				Version:      f.Version,
+				ModifiedTime: f.LocalLastModified,
+			})
+		}
+		respPayload, _ := json.Marshal(map[string]interface{}{
+			"repo_id": payload.RepoID,
+			"files":   list,
+		})
+		resp := &ipc.Message{
+			Version:   "1.0",
+			Type:      "repo_status_response",
+			Source:    "go",
+			Timestamp: time.Now().UnixNano() / int64(time.Millisecond),
+			Payload:   respPayload,
+		}
+		sc.ipcServer.SendMessage(resp)
+		return nil
 	}
 	return nil
 }

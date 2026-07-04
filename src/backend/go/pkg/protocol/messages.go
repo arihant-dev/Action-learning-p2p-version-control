@@ -16,6 +16,7 @@ type FileChangedPayload struct {
 	Hash         string `json:"hash"`
 	Size         int64  `json:"size"`
 	ModifiedTime int64  `json:"modified_time"` // Unix timestamp in seconds
+	Mode         uint32 `json:"mode"`
 }
 
 // Validate checks if the FileChangedPayload fields are correct.
@@ -171,6 +172,7 @@ type PrepareFileTransferPayload struct {
 	TransferPort int    `json:"transfer_port"`
 	ExpectedHash string `json:"expected_hash"`
 	ExpectedSize int64  `json:"expected_size"`
+	Mode         uint32 `json:"mode"`
 }
 
 // Validate checks if the PrepareFileTransferPayload fields are correct.
@@ -229,6 +231,7 @@ type FileMetadata struct {
 	Size         int64             `json:"size"`
 	ModifiedTime int64             `json:"modified_time"`
 	VectorClock  map[string]uint64 `json:"vector_clock"`
+	Mode         uint32            `json:"mode"`
 }
 
 // MetadataExchangePayload represents the local index shared between peers on sync.

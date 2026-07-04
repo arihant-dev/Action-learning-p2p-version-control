@@ -254,10 +254,27 @@ func TestAutoReconnect(t *testing.T) {
 	// Disconnect Server A
 	cmA.Stop()
 
-	// Wait for client B to detect disconnect
-	time.Sleep(200 * time.Millisecond)
+	// Wait for client B to detect disconnect (poll to avoid timing flakes on slow CI)
+	cmB.mu.RLock()
+	disconnected := make(chan struct{}, 1)
+	cmB.OnDisconnected = func(peerID string) {
+		if peerID == "peer-a" {
+			select {
+			case disconnected <- struct{}{}:
+			default:
+			}
+		}
+	}
+	cmB.mu.RUnlock()
+
+	select {
+	case <-disconnected:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for B to detect disconnect of A")
+	}
+
 	if cmB.IsConnected("peer-a") {
-		t.Fatal("expected B to detect disconnect of A")
+		t.Fatal("expected B to be disconnected from peer-a")
 	}
 
 	// Restart Server A on same port

@@ -66,6 +66,10 @@ func NewConnectionManager(localPeerID string) *ConnectionManager {
 	}
 }
 
+func (cm *ConnectionManager) LocalPeerID() string {
+	return cm.localPeerID
+}
+
 // StartServer starts the TCP server to listen for incoming P2P connections
 func (cm *ConnectionManager) StartServer(port int) error {
 	addr := ":" + strconv.Itoa(port)
@@ -138,7 +142,12 @@ func (cm *ConnectionManager) handleIncomingConnection(conn net.Conn) {
 	}
 
 	// 2. Send handshake response back
-	respPayload, _ := json.Marshal(HandshakePayload{PeerID: cm.localPeerID})
+	respPayload, err := json.Marshal(HandshakePayload{PeerID: cm.localPeerID})
+	if err != nil {
+		log.Printf("Failed to marshal handshake response: %v\n", err)
+		conn.Close()
+		return
+	}
 	respMsg := &ipc.Message{
 		Version:   "1.0",
 		Type:      "handshake",
@@ -199,7 +208,11 @@ func (cm *ConnectionManager) Connect(peerID, address string, port int) error {
 	}
 
 	// 1. Send initiator handshake
-	reqPayload, _ := json.Marshal(HandshakePayload{PeerID: cm.localPeerID})
+	reqPayload, err := json.Marshal(HandshakePayload{PeerID: cm.localPeerID})
+	if err != nil {
+		conn.Close()
+		return fmt.Errorf("failed to marshal initiator handshake: %w", err)
+	}
 	reqMsg := &ipc.Message{
 		Version:   "1.0",
 		Type:      "handshake",
@@ -272,7 +285,7 @@ func (cm *ConnectionManager) RemoveTarget(peerID string) {
 }
 
 func (cm *ConnectionManager) readLoop(peerID string, conn net.Conn) {
-	defer cm.CloseConnection(peerID)
+	defer cm.closeConnectionIfMatch(peerID, conn)
 
 	for {
 		msg, err := ipc.ReadMessage(conn)
@@ -319,6 +332,27 @@ func (cm *ConnectionManager) CloseConnection(peerID string) {
 	defer cm.mu.Unlock()
 
 	if conn, exists := cm.connections[peerID]; exists {
+		conn.Close()
+		delete(cm.connections, peerID)
+		delete(cm.writeMus, peerID)
+		delete(cm.lastSeen, peerID)
+		log.Printf("Disconnected from peer: %s\n", peerID)
+
+		if cm.OnDisconnected != nil {
+			go cm.OnDisconnected(peerID)
+		}
+	}
+}
+
+// closeConnectionIfMatch only closes the connection if it matches the stored
+// connection for that peerID. This prevents a readLoop from a stale connection
+// from closing a newer, valid connection that replaced it (e.g. during
+// simultaneous mutual discovery where both peers dial each other).
+func (cm *ConnectionManager) closeConnectionIfMatch(peerID string, conn net.Conn) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
+	if stored, ok := cm.connections[peerID]; ok && stored == conn {
 		conn.Close()
 		delete(cm.connections, peerID)
 		delete(cm.writeMus, peerID)
@@ -521,6 +555,17 @@ func (cm *ConnectionManager) attemptReconnections() {
 			}
 		}(target)
 	}
+}
+
+// ActiveConnections returns a copy of the active connection map for inspection.
+func (cm *ConnectionManager) ActiveConnections() map[string]net.Conn {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	conns := make(map[string]net.Conn, len(cm.connections))
+	for k, v := range cm.connections {
+		conns[k] = v
+	}
+	return conns
 }
 
 // Port returns the dynamic TCP port of the listening socket.

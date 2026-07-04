@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<?import javafx.geometry.Insets?>
+<VBox fx:id="rootContainer" alignment="CENTER" spacing="15.0" xmlns:fx="http://javafx.com/fxml"
+      fx:controller="org.codehaus.mojo.frontendtest.RepositoryListController"
+      styleClass="root">
+    <padding>
+        <Insets topRightBottomLeft="20"/>
+    </padding>
+
+    <Label styleClass="title-label" text="P2P Version Control"/>
+    <Label styleClass="section-label" text="Tracked Repositories"/>
+    <ListView fx:id="repoListView" onMouseClicked="#handleRepoClick" maxWidth="Infinity" VBox.vgrow="ALWAYS"/>
+
+    <VBox alignment="CENTER" spacing="10.0">
+        <Button maxWidth="Infinity" onAction="#handleAddRepo">Add / Create Repository</Button>
+        <Button maxWidth="Infinity" onAction="#handleShareRepo">Share Repository</Button>
+        <Button maxWidth="Infinity" onAction="#handleJoinRepo">Join New Repository</Button>
+        <Button maxWidth="Infinity" styleClass="button-danger" onAction="#handleDeleteRepo">Delete / Untrack Repository</Button>
+    </VBox>
+
+    <HBox alignment="CENTER_RIGHT" maxWidth="Infinity">
+        <Button fx:id="themeToggleButton" onAction="#handleThemeToggle" styleClass="button-icon">
+            lightmode
+        </Button>
+    </HBox>
+
+</VBox>

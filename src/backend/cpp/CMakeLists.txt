@@ -5,14 +5,15 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-find_package(nlohmann_json 3.12.0 REQUIRED)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
-include(FetchContent)
 
-# Main executable - Linux only
+# Main executable - Cross-Platform
 add_executable(cpp_daemon
     src/main.cpp
     src/filesystem_watcher.cpp
+    src/ipc_client.cpp
+    src/sha256.cpp
+    src/file_transfer.cpp
 )
 
 # Include directories
@@ -21,10 +22,8 @@ target_include_directories(cpp_daemon PRIVATE
 )
 
 target_link_libraries(cpp_daemon PRIVATE
-    nlohmann_json::nlohmann_json
     pthread
 )
-
 
 # Compiler warnings
 target_compile_options(cpp_daemon PRIVATE -Wall -Wextra -Wpedantic)
@@ -34,7 +33,7 @@ set_target_properties(cpp_daemon PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
-message(STATUS "Building C++ daemon for Linux (inotify)")
+message(STATUS "Building C++ daemon for Cross-Platform (std::filesystem)")
 message(STATUS "Output: ${CMAKE_BINARY_DIR}/bin/cpp_daemon")
 
 

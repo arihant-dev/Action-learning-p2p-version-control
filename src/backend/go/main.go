@@ -4,9 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -18,7 +21,68 @@ import (
 	"p2p/pkg/sync"
 )
 
+const pidFilePath = "/tmp/p2p_sync.pid"
+
+func writePIDFile() error {
+	pid := os.Getpid()
+	return os.WriteFile(pidFilePath, []byte(strconv.Itoa(pid)+"\n"), 0644)
+}
+
+func removePIDFile() {
+	os.Remove(pidFilePath)
+}
+
+func checkAndKillStaleProcess() {
+	data, err := os.ReadFile(pidFilePath)
+	if err != nil {
+		return
+	}
+	oldPID, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil || oldPID == os.Getpid() {
+		return
+	}
+	proc, err := os.FindProcess(oldPID)
+	if err != nil {
+		removePIDFile()
+		return
+	}
+	// Signal 0 checks if process exists without killing
+	if err := proc.Signal(syscall.Signal(0)); err != nil {
+		removePIDFile()
+		return
+	}
+	log.Printf("[Main] Detected stale process PID %d. Sending SIGTERM...\n", oldPID)
+	proc.Signal(syscall.SIGTERM)
+	// Give it a moment to release resources
+	time.Sleep(500 * time.Millisecond)
+	// Force kill if still alive
+	if err := proc.Signal(syscall.Signal(0)); err == nil {
+		log.Printf("[Main] Stale PID %d still alive. Sending SIGKILL...\n", oldPID)
+		proc.Kill()
+		time.Sleep(200 * time.Millisecond)
+	}
+	removePIDFile()
+}
+
+func probePort(port int) (bool, error) {
+	ln, err := net.Listen("tcp", ":"+strconv.Itoa(port))
+	if err != nil {
+		return false, nil // port in use
+	}
+	ln.Close()
+	return true, nil
+}
+
 func main() {
+	// Before anything else: check for stale PID and release its resources
+	checkAndKillStaleProcess()
+
+	// Write PID file (remove on exit)
+	if err := writePIDFile(); err != nil {
+		log.Printf("[Main] Warning: Could not write PID file: %v\n", err)
+	}
+	defer removePIDFile()
+
 	// Determine local peer ID (hostname)
 	localPeerID, err := os.Hostname()
 	if err != nil {
@@ -36,16 +100,33 @@ func main() {
 		}
 	}
 
+	// Probe and handle port conflict
+	if free, err := probePort(p2pPort); err != nil || !free {
+		log.Printf("[Main] Port %d is in use. Attempting recovery...\n", p2pPort)
+		// Try ports sequentially as fallback
+		for alt := p2pPort + 1; alt < p2pPort+100; alt++ {
+			if free, _ := probePort(alt); free {
+				log.Printf("[Main] Fallback: using port %d instead of %d\n", alt, p2pPort)
+				p2pPort = alt
+				break
+			}
+		}
+	}
+
 	// Read IPC socket path config
 	ipcSocket := "/tmp/p2p_sync.sock"
 	if envIpcSocket := os.Getenv("IPC_SOCKET"); envIpcSocket != "" {
 		ipcSocket = envIpcSocket
 	}
 
+	log.Printf("[Main] PID: %d, PeerID: %s, P2P Port: %d, IPC Socket: %s\n", os.Getpid(), localPeerID, p2pPort, ipcSocket)
+
 	// Start IPC server
 	ipcServer := ipc.NewIpcServer(ipcSocket)
 	if err := ipcServer.Start(); err != nil {
-		log.Fatalf("Failed to start IPC server: %v", err)
+		log.Printf("[Main] Failed to start IPC server: %v\n", err)
+		removePIDFile()
+		os.Exit(1)
 	}
 	defer ipcServer.Stop()
 
@@ -53,9 +134,12 @@ func main() {
 	peerRegistry := discovery.NewPeerRegistry()
 	mdnsServer, err := peerRegistry.StartDiscovery(localPeerID, p2pPort)
 	if err != nil {
-		log.Fatalf("Failed to start peer discovery: %v", err)
+		log.Printf("[Main] Failed to start peer discovery: %v\n", err)
+		removePIDFile()
+		os.Exit(1)
 	}
 	defer func() {
+		peerRegistry.StopDiscovery()
 		if mdnsServer != nil {
 			mdnsServer.Shutdown()
 		}
@@ -64,9 +148,29 @@ func main() {
 	// Start connection manager with localPeerID
 	connMgr := network.NewConnectionManager(localPeerID)
 	if err := connMgr.StartServer(p2pPort); err != nil {
-		log.Fatalf("Failed to start P2P server: %v", err)
+		log.Printf("[Main] Failed to start P2P server: %v\n", err)
+		removePIDFile()
+		os.Exit(1)
 	}
 	defer connMgr.Stop()
+
+	// Read manual peer configurations from environment variable PEER_ADDRESSES (fallback when mDNS is blocked by router/firewall)
+	if envPeers := os.Getenv("PEER_ADDRESSES"); envPeers != "" {
+		log.Printf("Parsing manual PEER_ADDRESSES: %s\n", envPeers)
+		for _, pStr := range strings.Split(envPeers, ",") {
+			parts := strings.Split(pStr, "@")
+			if len(parts) == 2 {
+				peerID := parts[0]
+				addrParts := strings.Split(parts[1], ":")
+				if len(addrParts) == 2 {
+					host := addrParts[0]
+					if portVal, err := strconv.Atoi(addrParts[1]); err == nil {
+						peerRegistry.AddManualPeer(peerID, host, portVal)
+					}
+				}
+			}
+		}
+	}
 
 	// Initialize sqlite DB
 	dbPath := "p2p_sync.db"
@@ -75,14 +179,18 @@ func main() {
 	}
 	db, err := sqlite.Open(dbPath)
 	if err != nil {
-		log.Fatalf("Failed to open SQLite database: %v", err)
+		log.Printf("[Main] Failed to open SQLite database: %v\n", err)
+		removePIDFile()
+		os.Exit(1)
 	}
 	defer db.Close()
 
 	// Start sync coordinator
 	coord := sync.NewSyncCoordinator(db, ipcServer, connMgr, localPeerID)
 	if err := coord.Start(); err != nil {
-		log.Fatalf("Failed to start sync coordinator: %v", err)
+		log.Printf("[Main] Failed to start sync coordinator: %v\n", err)
+		removePIDFile()
+		os.Exit(1)
 	}
 	defer coord.Stop()
 
@@ -136,7 +244,7 @@ func main() {
 	ipcServer.OnMessage = func(msg *ipc.Message) error {
 		fmt.Printf("Received from C++: %s\n", msg.Type)
 
-		if msg.Type == "file_changed" || msg.Type == "add_repository" || msg.Type == "remove_repository" {
+		if msg.Type == "file_changed" || msg.Type == "add_repository" || msg.Type == "remove_repository" || msg.Type == "repo_list_request" || msg.Type == "repo_status_request" {
 			return coord.HandleIPCMessage(msg)
 		}
 
@@ -148,12 +256,23 @@ func main() {
 		return nil
 	}
 
+	// HTTP health endpoint
+	healthPort := 8080
+	if envPort := os.Getenv("HEALTH_PORT"); envPort != "" {
+		if val, err := strconv.Atoi(envPort); err == nil {
+			healthPort = val
+		}
+	}
+	startTime := time.Now()
+	healthSrv := startHealthEndpoint(healthPort, localPeerID, p2pPort, connMgr, startTime)
+
 	// Graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	<-sigChan
 
 	fmt.Println("Shutting down...")
+	healthSrv.Close()
 }
 
 func handleFileChanged(msg *ipc.Message, connMgr *network.ConnectionManager) error {
@@ -167,6 +286,9 @@ func sendPeerList(registry *discovery.PeerRegistry, connMgr *network.ConnectionM
 	peerList := make([]protocol.PeerInfo, 0, len(peers))
 
 	for _, p := range peers {
+		if p.ID == connMgr.LocalPeerID() {
+			continue
+		}
 		peerList = append(peerList, protocol.PeerInfo{
 			ID:        p.ID,
 			Name:      p.Name,
@@ -192,4 +314,42 @@ func sendPeerList(registry *discovery.PeerRegistry, connMgr *network.ConnectionM
 
 	ipcServer.SendMessage(responseMsg)
 	return nil
+}
+
+// HealthSummary contains the fields returned by the /health endpoint.
+type HealthSummary struct {
+	PID         int    `json:"pid"`
+	PeerID      string `json:"peer_id"`
+	P2PPort     int    `json:"p2p_port"`
+	Connections int    `json:"connections"`
+	Uptime      string `json:"uptime"`
+	Status      string `json:"status"`
+}
+
+func startHealthEndpoint(port int, peerID string, p2pPort int, connMgr interface{ ActiveConnections() map[string]net.Conn }, startTime time.Time) *http.Server {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(HealthSummary{
+			PID:         os.Getpid(),
+			PeerID:      peerID,
+			P2PPort:     p2pPort,
+			Connections: len(connMgr.ActiveConnections()),
+			Uptime:      time.Since(startTime).String(),
+			Status:      "ok",
+		})
+	})
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		log.Printf("[Main] Failed to listen on health port %d: %v\n", port, err)
+		return nil
+	}
+	srv := &http.Server{Handler: mux}
+	go func() {
+		log.Printf("[Main] Health endpoint listening on %s\n", listener.Addr().String())
+		if err := srv.Serve(listener); err != nil && err != http.ErrServerClosed {
+			log.Printf("[Main] Health endpoint error: %v\n", err)
+		}
+	}()
+	return srv
 }

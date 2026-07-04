@@ -1,0 +1,142 @@
+.root {
+    -fx-font-family: 'Inter', 'Outfit', 'Helvetica Neue', sans-serif;
+    -fx-background-color: -theme-bg;
+    -fx-text-fill: -theme-text-main;
+}
+
+.label {
+    -fx-text-fill: -theme-text-main;
+}
+
+.title-label {
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -theme-text-main;
+    -fx-padding: 0 0 10 0;
+}
+
+.section-label {
+    -fx-font-size: 14px;
+    -fx-font-weight: 600;
+    -fx-text-fill: -theme-text-muted;
+    -fx-padding: 5 0 5 0;
+}
+
+.text-area {
+    -fx-control-inner-background: -theme-card-bg;
+    -fx-background-color: -theme-card-bg;
+    -fx-text-fill: -theme-text-secondary;
+    -fx-border-color: -theme-border;
+    -fx-border-width: 1px;
+    -fx-border-radius: 8px;
+    -fx-background-radius: 8px;
+}
+
+.text-area .content {
+    -fx-background-color: transparent;
+}
+
+.list-view {
+    -fx-background-color: -theme-card-bg;
+    -fx-border-color: -theme-border;
+    -fx-border-width: 1px;
+    -fx-border-radius: 8px;
+    -fx-background-radius: 8px;
+    -fx-padding: 4;
+}
+
+.list-view:focused {
+    -fx-border-color: -theme-accent;
+}
+
+.list-cell {
+    -fx-background-color: transparent;
+    -fx-text-fill: -theme-text-secondary;
+    -fx-padding: 10 12;
+    -fx-background-radius: 6px;
+    -fx-margin: 2 0;
+}
+
+.list-cell:filled:selected,
+.list-cell:filled:selected:focused {
+    -fx-background-color: -theme-accent;
+    -fx-text-fill: white;
+}
+
+.list-cell:filled:hover {
+    -fx-background-color: -theme-border-hover;
+}
+
+.button {
+    -fx-background-color: -theme-accent;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-padding: 8 16;
+    -fx-background-radius: 8px;
+    -fx-border-radius: 8px;
+    -fx-cursor: hand;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.15), 4, 0, 0, 2);
+}
+
+.button:hover {
+    -fx-background-color: -theme-accent-hover;
+}
+
+.button-danger {
+    -fx-background-color: #dc2626;
+}
+
+.button-danger:hover {
+    -fx-background-color: #b91c1c;
+}
+
+.button-icon {
+    -fx-background-color: transparent;
+    -fx-text-fill: -theme-text-main;
+    -fx-border-color: -theme-border;
+    -fx-border-width: 1px;
+    -fx-border-radius: 8px;
+    -fx-background-radius: 8px;
+    -fx-padding: 8 12;
+    -fx-effect: none;
+}
+
+.button-icon:hover {
+    -fx-background-color: -theme-border-hover;
+}
+
+.scroll-pane,
+.scroll-pane .viewport {
+    -fx-background-color: transparent;
+}
+
+.scroll-bar:vertical,
+.scroll-bar:horizontal {
+    -fx-background-color: transparent;
+}
+
+.scroll-bar:vertical .thumb {
+    -fx-background-color: -theme-border;
+    -fx-background-insets: 2, 0, 0;
+    -fx-background-radius: 2em;
+}
+
+.scroll-bar:horizontal .thumb {
+    -fx-background-color: -theme-border;
+    -fx-background-insets: 2, 0, 0;
+    -fx-background-radius: 2em;
+}
+
+.text-field {
+    -fx-background-color: -theme-card-bg;
+    -fx-text-fill: -theme-text-secondary;
+    -fx-border-color: -theme-border;
+    -fx-border-width: 1px;
+    -fx-border-radius: 6px;
+    -fx-background-radius: 6px;
+    -fx-padding: 8 12;
+}
+
+.text-field:focused {
+    -fx-border-color: -theme-accent;
+}

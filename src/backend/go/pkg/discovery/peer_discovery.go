@@ -27,6 +27,10 @@ type PeerRegistry struct {
 	// Callbacks
 	OnPeerDiscovered func(*Peer)
 	OnPeerLost       func(*Peer)
+
+	// mDNS lifecycle control
+	cancelBrowse context.CancelFunc
+	browseWg     sync.WaitGroup
 }
 
 func NewPeerRegistry() *PeerRegistry {
@@ -36,7 +40,6 @@ func NewPeerRegistry() *PeerRegistry {
 }
 
 func (pr *PeerRegistry) StartDiscovery(localPeerID string, port int) (*zeroconf.Server, error) {
-	// Register this peer via mDNS
 	instanceName := localPeerID
 	if instanceName == "" {
 		instanceName, _ = os.Hostname()
@@ -51,13 +54,27 @@ func (pr *PeerRegistry) StartDiscovery(localPeerID string, port int) (*zeroconf.
 		return nil, fmt.Errorf("failed to register service: %v", err)
 	}
 
-	// Browse for other peers
-	go pr.browsePeers()
+	// Browse for other peers with a cancellable context
+	ctx, cancel := context.WithCancel(context.Background())
+	pr.cancelBrowse = cancel
+	pr.browseWg.Add(1)
+	go pr.browsePeers(ctx)
 
 	return server, nil
 }
 
-func (pr *PeerRegistry) browsePeers() {
+// StopDiscovery cancels the mDNS browsing goroutine and waits for cleanup.
+func (pr *PeerRegistry) StopDiscovery() {
+	if pr.cancelBrowse != nil {
+		pr.cancelBrowse()
+		pr.cancelBrowse = nil
+	}
+	pr.browseWg.Wait()
+}
+
+func (pr *PeerRegistry) browsePeers(ctx context.Context) {
+	defer pr.browseWg.Done()
+
 	resolver, err := zeroconf.NewResolver(nil)
 	if err != nil {
 		log.Printf("Failed to create mDNS resolver: %v", err)
@@ -71,9 +88,9 @@ func (pr *PeerRegistry) browsePeers() {
 		}
 	}(entries)
 
-	// Browse indefinitely
-	err = resolver.Browse(context.Background(), "_p2psync._tcp", "local.", entries)
-	if err != nil {
+	// Browse until context is cancelled (zeroconf will close entries when ctx is done)
+	err = resolver.Browse(ctx, "_p2psync._tcp", "local.", entries)
+	if err != nil && err != context.Canceled {
 		log.Printf("Browse failed: %v", err)
 	}
 }
@@ -107,6 +124,25 @@ func (pr *PeerRegistry) handlePeerDiscovered(entry *zeroconf.ServiceEntry) {
 		}
 		log.Printf("Peer discovered: %s (%s:%d)\n", peer.Name, peer.Address, peer.Port)
 	}
+}
+
+func (pr *PeerRegistry) AddManualPeer(id, address string, port int) {
+	peer := &Peer{
+		ID:       id,
+		Name:     id,
+		Address:  address,
+		Port:     port,
+		LastSeen: time.Now(),
+	}
+	pr.mu.Lock()
+	if _, exists := pr.peers[peer.ID]; !exists {
+		pr.peers[peer.ID] = peer
+		if pr.OnPeerDiscovered != nil {
+			go pr.OnPeerDiscovered(peer)
+		}
+		log.Printf("Manual peer added: %s (%s:%d)\n", peer.Name, peer.Address, peer.Port)
+	}
+	pr.mu.Unlock()
 }
 
 func (pr *PeerRegistry) GetPeers() []*Peer {

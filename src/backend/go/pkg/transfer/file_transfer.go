@@ -45,7 +45,7 @@ func NewFileTransferManager(ipcServer *ipc.IpcServer) *FileTransferManager {
 
 // StartDownload initiates a file download. It connects to the peer's transfer port,
 // sets up a local listener for the C++ daemon to connect to, and proxies the bytes.
-func (ft *FileTransferManager) StartDownload(transferID, filePath, peerID, expectedHash string, expectedSize int64, peerAddr string, peerPort int) error {
+func (ft *FileTransferManager) StartDownload(transferID, filePath, peerID, expectedHash string, expectedSize int64, peerAddr string, peerPort int, mode uint32) error {
 	// 1. Connect to remote peer's TCP transfer socket
 	addr := net.JoinHostPort(peerAddr, strconv.Itoa(peerPort))
 	netConn, err := net.DialTimeout("tcp", addr, 10*time.Second)
@@ -91,8 +91,15 @@ func (ft *FileTransferManager) StartDownload(transferID, filePath, peerID, expec
 		"transfer_port": localPort,
 		"expected_hash": expectedHash,
 		"expected_size": expectedSize,
+		"direction":     "download",
+		"mode":          mode,
 	}
-	payloadBytes, _ := json.Marshal(payload)
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		netConn.Close()
+		localListener.Close()
+		return fmt.Errorf("marshal download payload: %w", err)
+	}
 	msg.Payload = payloadBytes
 
 	ft.ipcServer.SendMessage(msg)
@@ -150,8 +157,14 @@ func (ft *FileTransferManager) StartUpload(transferID, filePath, peerID, expecte
 		"transfer_port": localPort,
 		"expected_hash": expectedHash,
 		"expected_size": expectedSize,
+		"direction":     "upload",
 	}
-	payloadBytes, _ := json.Marshal(payload)
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		netListener.Close()
+		localListener.Close()
+		return 0, fmt.Errorf("marshal upload payload: %w", err)
+	}
 	msg.Payload = payloadBytes
 
 	ft.ipcServer.SendMessage(msg)
@@ -266,6 +279,19 @@ func (ft *FileTransferManager) finishSession(session *TransferSession, err error
 	}
 	session.mu.Unlock()
 
+	// Purge old sessions when map grows too large (prevent memory leak)
+	ft.mu.Lock()
+	if len(ft.sessions) > 1000 {
+		for id, s := range ft.sessions {
+			s.mu.Lock()
+			if s.Status == "completed" || s.Status == "failed" {
+				delete(ft.sessions, id)
+			}
+			s.mu.Unlock()
+		}
+	}
+	ft.mu.Unlock()
+
 	completeMsg := &ipc.Message{
 		Version:   "1.0",
 		Type:      "file_transfer_complete",
@@ -285,10 +311,13 @@ func (ft *FileTransferManager) finishSession(session *TransferSession, err error
 		"success":     success,
 		"error":       errStr,
 	}
-	payloadBytes, _ := json.Marshal(payload)
-	completeMsg.Payload = payloadBytes
-
-	ft.ipcServer.SendMessage(completeMsg)
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("[FileTransferManager] Failed to marshal completion payload: %v\n", err)
+	} else {
+		completeMsg.Payload = payloadBytes
+		ft.ipcServer.SendMessage(completeMsg)
+	}
 }
 
 // GetSession returns a copy of a session state.

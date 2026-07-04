@@ -41,7 +41,7 @@ func TestFileTransferSessionCreation(t *testing.T) {
 		}
 	}()
 
-	err = ft.StartDownload("trans_123", "docs/file.txt", "peer_bob", "hash123", 100, "127.0.0.1", netPort)
+	err = ft.StartDownload("trans_123", "docs/file.txt", "peer_bob", "hash123", 100, "127.0.0.1", netPort, 420)
 	if err != nil {
 		t.Fatalf("start download failed: %v", err)
 	}
@@ -119,7 +119,7 @@ func TestFileTransferStreaming(t *testing.T) {
 		_, _ = io.WriteString(conn, mockData)
 	}()
 
-	err = ft.StartDownload("dl_session_1", "notes.txt", "peer_alice", "hashxyz", int64(len(mockData)), "127.0.0.1", p2pPort)
+	err = ft.StartDownload("dl_session_1", "notes.txt", "peer_alice", "hashxyz", int64(len(mockData)), "127.0.0.1", p2pPort, 420)
 	if err != nil {
 		t.Fatalf("start download: %v", err)
 	}
@@ -191,7 +191,7 @@ func TestIPv6AddressHandling(t *testing.T) {
 		}
 	}()
 
-	err = ft.StartDownload("trans_ipv6", "docs/file.txt", "peer_bob", "hash123", 100, "::1", netPort)
+	err = ft.StartDownload("trans_ipv6", "docs/file.txt", "peer_bob", "hash123", 100, "::1", netPort, 420)
 	if err != nil {
 		t.Fatalf("StartDownload failed with IPv6: %v", err)
 	}
@@ -236,7 +236,7 @@ func TestFileTransferSizeMismatch(t *testing.T) {
 	}()
 
 	// We expect 10 bytes, but mockData is only 5 bytes.
-	err = ft.StartDownload("session_mismatch", "notes.txt", "peer_alice", "hashxyz", 10, "127.0.0.1", p2pPort)
+	err = ft.StartDownload("session_mismatch", "notes.txt", "peer_alice", "hashxyz", 10, "127.0.0.1", p2pPort, 420)
 	if err != nil {
 		t.Fatalf("start download: %v", err)
 	}

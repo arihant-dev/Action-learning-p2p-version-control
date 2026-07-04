@@ -119,6 +119,12 @@ apidocs/
 *.lot
 *.lof
 
+# Agentic context (local agent knowledge graphs, not published)
+.agents/
+
 # Local context (not published)
 .project_context.md
 .agent_notes.md
+
+# Runtime artifacts
+p2p_sync.db

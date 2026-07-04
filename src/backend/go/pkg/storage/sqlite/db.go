@@ -32,6 +32,7 @@ var schemaStatements = []string{
 		local_last_modified INTEGER NOT NULL,
 		is_deleted          INTEGER NOT NULL DEFAULT 0,
 		updated_at          INTEGER NOT NULL,
+		mode                INTEGER NOT NULL DEFAULT 420,
 		PRIMARY KEY (repository_id, filepath),
 		FOREIGN KEY (repository_id) REFERENCES repositories(id) ON DELETE CASCADE
 	)`,
@@ -69,6 +70,9 @@ func Open(path string) (*DB, error) {
 		conn.Close()
 		return nil, fmt.Errorf("ping sqlite db: %w", err)
 	}
+
+	// Limit to 1 connection to prevent pool fragmentation in SQLite
+	conn.SetMaxOpenConns(1)
 
 	db := &DB{conn: conn}
 	if err := db.applySchema(); err != nil {

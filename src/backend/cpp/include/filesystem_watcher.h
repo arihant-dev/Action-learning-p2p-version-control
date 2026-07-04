@@ -1,28 +1,35 @@
-#include <functional>
-#include <nlohmann/json.hpp>
-#include <string>
-#include <sys/inotify.h>
-#include <thread>
-#include <unistd.h>
+#pragma once
 
-// Linux-only file system watcher using inotify
+#include <functional>
+#include <string>
+#include <thread>
+#include <atomic>
+#include <map>
+#include <filesystem>
+
 class FileSystemWatcher {
 public:
-  using FileChangeCallback =
-      std::function<void(const std::string &, const std::string &)>;
-  FileSystemWatcher(const std::string &watch_path, std::atomic<bool> &shutdown)
-      : watch_path_(watch_path), shutdown_(shutdown), inotify_fd_(-1),
-        watch_descriptor_(-1) {}
-  ~FileSystemWatcher();
-  bool start(FileChangeCallback callback);
-  void stop();
+    using FileChangeCallback =
+        std::function<void(const std::string &path, const std::string &action)>;
+
+    FileSystemWatcher(const std::string &watch_path, std::atomic<bool> &shutdown);
+    ~FileSystemWatcher();
+
+    bool start(FileChangeCallback callback);
+    void stop();
 
 private:
-  const std::string watch_path_;
-  std::atomic<bool> &shutdown_;
-  int inotify_fd_;
-  int watch_descriptor_;
-  std::thread watch_thread_;
-  FileChangeCallback callback_;
-  void watch_loop();
+    const std::string watch_path_;
+    std::atomic<bool> &shutdown_;
+    std::thread watch_thread_;
+    FileChangeCallback callback_;
+
+    struct FileInfo {
+        std::filesystem::file_time_type last_write_time;
+        uintmax_t size;
+    };
+    std::map<std::string, FileInfo> known_files_;
+
+    void watch_loop();
+    void scan_directory(bool notify);
 };

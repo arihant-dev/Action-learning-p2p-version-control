@@ -1,0 +1,25 @@
+FROM ubuntu:22.04
+
+# Avoid timezone and other interactive prompts
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install JDK 21, Maven, CMake, compilers and curl
+RUN apt-get update && apt-get install -y \
+    openjdk-21-jdk \
+    maven \
+    cmake \
+    g++ \
+    make \
+    binutils \
+    fakeroot \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install official Go 1.24.4
+RUN curl -OL https://golang.org/dl/go1.24.4.linux-amd64.tar.gz && \
+    tar -C /usr/local -xzf go1.24.4.linux-amd64.tar.gz && \
+    rm go1.24.4.linux-amd64.tar.gz
+
+ENV PATH=$PATH:/usr/local/go/bin
+
+WORKDIR /workspace

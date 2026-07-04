@@ -17,6 +17,7 @@ type FileMetadata struct {
 	LocalLastModified int64 // Unix milliseconds
 	IsDeleted         bool  // Tombstone flag
 	UpdatedAt         int64 // Unix milliseconds
+	Mode              uint32
 }
 
 // MetadataStore provides CRUD operations on the file_metadata table.
@@ -37,17 +38,18 @@ func (s *MetadataStore) Save(m *FileMetadata) error {
 
 	_, err := s.db.Exec(`
 		INSERT INTO file_metadata
-			(repository_id, filepath, hash, size, version, local_last_modified, is_deleted, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			(repository_id, filepath, hash, size, version, local_last_modified, is_deleted, updated_at, mode)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(repository_id, filepath) DO UPDATE SET
 			hash                = excluded.hash,
 			size                = excluded.size,
 			version             = excluded.version,
 			local_last_modified = excluded.local_last_modified,
 			is_deleted          = excluded.is_deleted,
-			updated_at          = excluded.updated_at
+			updated_at          = excluded.updated_at,
+			mode                = excluded.mode
 	`, m.RepositoryID, m.Filepath, m.Hash, m.Size, m.Version,
-		m.LocalLastModified, deleted, m.UpdatedAt)
+		m.LocalLastModified, deleted, m.UpdatedAt, m.Mode)
 	if err != nil {
 		return fmt.Errorf("save file metadata: %w", err)
 	}
@@ -61,12 +63,12 @@ func (s *MetadataStore) Get(repoID, filepath string) (*FileMetadata, error) {
 	var deleted int
 	err := s.db.QueryRow(`
 		SELECT repository_id, filepath, hash, size, version,
-		       local_last_modified, is_deleted, updated_at
+		       local_last_modified, is_deleted, updated_at, mode
 		FROM file_metadata
 		WHERE repository_id = ? AND filepath = ?
 	`, repoID, filepath).Scan(
 		&m.RepositoryID, &m.Filepath, &m.Hash, &m.Size, &m.Version,
-		&m.LocalLastModified, &deleted, &m.UpdatedAt,
+		&m.LocalLastModified, &deleted, &m.UpdatedAt, &m.Mode,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -85,12 +87,12 @@ func (s *MetadataStore) GetByPathAndHash(filepath, hash string) (*FileMetadata, 
 	var deleted int
 	err := s.db.QueryRow(`
 		SELECT repository_id, filepath, hash, size, version,
-		       local_last_modified, is_deleted, updated_at
+		       local_last_modified, is_deleted, updated_at, mode
 		FROM file_metadata
 		WHERE filepath = ? AND hash = ? AND is_deleted = 0
 	`, filepath, hash).Scan(
 		&m.RepositoryID, &m.Filepath, &m.Hash, &m.Size, &m.Version,
-		&m.LocalLastModified, &deleted, &m.UpdatedAt,
+		&m.LocalLastModified, &deleted, &m.UpdatedAt, &m.Mode,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -107,7 +109,7 @@ func (s *MetadataStore) GetByPathAndHash(filepath, hash string) (*FileMetadata, 
 func (s *MetadataStore) ListByRepository(repoID string, includeDeleted bool) ([]*FileMetadata, error) {
 	query := `
 		SELECT repository_id, filepath, hash, size, version,
-		       local_last_modified, is_deleted, updated_at
+		       local_last_modified, is_deleted, updated_at, mode
 		FROM file_metadata
 		WHERE repository_id = ?
 	`
@@ -128,7 +130,7 @@ func (s *MetadataStore) ListByRepository(repoID string, includeDeleted bool) ([]
 		var deleted int
 		if err := rows.Scan(
 			&m.RepositoryID, &m.Filepath, &m.Hash, &m.Size, &m.Version,
-			&m.LocalLastModified, &deleted, &m.UpdatedAt,
+			&m.LocalLastModified, &deleted, &m.UpdatedAt, &m.Mode,
 		); err != nil {
 			return nil, fmt.Errorf("scan file metadata: %w", err)
 		}
