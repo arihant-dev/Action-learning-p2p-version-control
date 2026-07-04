@@ -34,7 +34,7 @@ jobs:
 
       - run: go build ./...
 
-      - run: go clean -testcache && go test ./... -count=1 -a
+      - run: go clean -cache && go test ./... -count=1 -a
 
   cpp-build-test:
     strategy:
