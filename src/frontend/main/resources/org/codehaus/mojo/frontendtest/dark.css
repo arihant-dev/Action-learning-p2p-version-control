@@ -1,0 +1,14 @@
+.root {
+    -theme-bg: #0f172a;
+    -theme-text-main: #f1f5f9;
+    -theme-text-muted: #94a3b8;
+    -theme-text-secondary: #e2e8f0;
+    -theme-text-highlight: #ffffff;
+
+    -theme-card-bg: #1e293b;
+    -theme-border: #334155;
+    -theme-border-hover: #475569;
+
+    -theme-accent: #3b82f6;
+    -theme-accent-hover: #2563eb;
+}
