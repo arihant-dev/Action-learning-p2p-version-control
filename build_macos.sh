@@ -1,8 +1,11 @@
 #!/bin/bash
 set -e
 
+VERSION="${VERSION:-1.0.0}"
+APP_NAME="P2PVersionControl"
+
 echo "===================================================="
-echo " Building P2P Version Control for macOS"
+echo " Building $APP_NAME for macOS (v$VERSION)"
 echo "===================================================="
 
 # Check dependencies
@@ -56,14 +59,23 @@ echo "--> 5. Generating Self-Contained macOS App Bundle..."
 rm -rf target/bundle
 jpackage \
     --type app-image \
-    --name "P2PVersionControl" \
+    --name "$APP_NAME" \
+    --app-version "$VERSION" \
     --runtime-image target/app \
     --module org.codehaus.mojo.frontendtest/org.codehaus.mojo.frontendtest.HelloApplication \
     --dest target/bundle \
     --verbose
 
+echo "--> 6. Creating distribution archive..."
+(
+    cd target/bundle
+    zip -r "../${APP_NAME}-${VERSION}-macos.zip" "$APP_NAME.app"
+)
+
 echo "===================================================="
 echo " Build Success!"
-echo " Launch the app on macOS with:"
-echo "   open target/bundle/P2PVersionControl.app"
+echo "   Version: $VERSION"
+echo "   App Bundle: target/bundle/$APP_NAME.app"
+echo "   Archive:    target/${APP_NAME}-${VERSION}-macos.zip"
+echo " Launch with: open target/bundle/$APP_NAME.app"
 echo "===================================================="
