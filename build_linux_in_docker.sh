@@ -1,9 +1,12 @@
 #!/bin/bash
 set -e
 
+VERSION="${VERSION:-1.0.0}"
+APP_NAME="P2PVersionControl"
+
 echo "===================================================="
-echo " Starting P2P Version Control Build Inside Docker"
-echo " Target: Linux (x86_64 / amd64)"
+echo " Starting $APP_NAME Build Inside Docker"
+echo " Target: Linux (x86_64 / amd64) — v$VERSION"
 echo "===================================================="
 
 # Compile Go coordinator
@@ -28,19 +31,28 @@ mvn clean javafx:jlink
 
 # Copy Go and C++ components
 echo "--> 4. Embedding Go & C++ components in Linux bundle..."
+mkdir -p target/app/bin
 cp build/go_coordinator target/app/bin/
 cp src/backend/cpp/build/bin/cpp_daemon target/app/bin/
 
 # Package using jpackage
 echo "--> 5. Generating Linux App Image..."
 rm -rf target/bundle
-jpackage --type app-image --name "P2PVersionControl" --runtime-image target/app --module org.codehaus.mojo.frontendtest/org.codehaus.mojo.frontendtest.HelloApplication --dest target/bundle --verbose
+jpackage \
+    --type app-image \
+    --name "$APP_NAME" \
+    --app-version "$VERSION" \
+    --runtime-image target/app \
+    --module org.codehaus.mojo.frontendtest/org.codehaus.mojo.frontendtest.HelloApplication \
+    --dest target/bundle \
+    --verbose
 
 # Create a tarball of the final self-contained app
-echo "--> 6. Creating final distribution tarball..."
-tar -czf target/P2PVersionControl-linux-x64.tar.gz -C target/bundle P2PVersionControl
+echo "--> 6. Creating distribution tarball..."
+tar -czf "target/${APP_NAME}-${VERSION}-linux-x64.tar.gz" -C target/bundle "$APP_NAME"
 
 echo "===================================================="
 echo " Build Success!"
-echo " Output Archive: target/P2PVersionControl-linux-x64.tar.gz"
+echo "   Version: $VERSION"
+echo "   Archive: target/${APP_NAME}-${VERSION}-linux-x64.tar.gz"
 echo "===================================================="
