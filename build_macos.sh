@@ -57,14 +57,27 @@ cp src/backend/cpp/build/bin/cpp_daemon "$APP_DIR/bin/"
 
 echo "--> 5. Generating Self-Contained macOS App Bundle..."
 rm -rf target/bundle
+
+# Clear any extended attributes on the target/app directory to prevent codesign issues
+xattr -cr target/app || true
+
+# Use a temporary directory outside the iCloud-synced workspace to run jpackage,
+# which avoids macOS Finder/FileProvider from dynamically injecting disallowed xattrs
+# (like com.apple.FinderInfo) during the codesign process.
+TMP_BUILD_DIR=$(mktemp -d -t jpackage-build)
+trap 'rm -rf "$TMP_BUILD_DIR"' EXIT
+
 jpackage \
     --type app-image \
     --name "$APP_NAME" \
     --app-version "$VERSION" \
     --runtime-image target/app \
     --module org.codehaus.mojo.frontendtest/org.codehaus.mojo.frontendtest.HelloApplication \
-    --dest target/bundle \
+    --dest "$TMP_BUILD_DIR" \
     --verbose
+
+mkdir -p target/bundle
+cp -R "$TMP_BUILD_DIR/$APP_NAME.app" target/bundle/
 
 echo "--> 6. Creating distribution archive..."
 (
