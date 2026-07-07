@@ -211,6 +211,76 @@ public class RepoStatusController {
         return String.format("%.1f %sB", bytes / Math.pow(1024, exp), pre);
     }
 
+    @FXML
+    protected void handleAddPeer() {
+        javafx.scene.control.Dialog<java.util.Map<String, String>> dialog = new javafx.scene.control.Dialog<>();
+        dialog.setTitle("Connect to Peer Manually");
+        dialog.setHeaderText("Add peer details when automatic discovery (mDNS) is blocked");
+
+        try {
+            dialog.getDialogPane().getStylesheets().addAll(
+                HelloApplication.class.getResource("styles.css").toExternalForm()
+            );
+            dialog.getDialogPane().getStyleClass().add("root");
+        } catch (Exception ignored) {}
+
+        javafx.scene.control.ButtonType actionButtonType = new javafx.scene.control.ButtonType("Connect", javafx.scene.control.ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(actionButtonType, javafx.scene.control.ButtonType.CANCEL);
+
+        javafx.scene.layout.GridPane grid = new javafx.scene.layout.GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.setPadding(new javafx.geometry.Insets(20, 150, 10, 10));
+
+        javafx.scene.control.TextField peerIdField = new javafx.scene.control.TextField();
+        peerIdField.setPromptText("e.g. peer-hostname");
+        javafx.scene.control.TextField addressField = new javafx.scene.control.TextField();
+        addressField.setPromptText("e.g. 192.168.1.15");
+
+        grid.add(new javafx.scene.control.Label("Peer ID:"), 0, 0);
+        grid.add(peerIdField, 1, 0);
+        grid.add(new javafx.scene.control.Label("IP Address:"), 0, 1);
+        grid.add(addressField, 1, 1);
+
+        dialog.getDialogPane().setContent(grid);
+
+        Platform.runLater(peerIdField::requestFocus);
+
+        dialog.setResultConverter(dialogButton -> {
+            if (dialogButton == actionButtonType) {
+                java.util.Map<String, String> map = new java.util.HashMap<>();
+                map.put("peer_id", peerIdField.getText().trim());
+                map.put("address", addressField.getText().trim());
+                return map;
+            }
+            return null;
+        });
+
+        dialog.showAndWait().ifPresent(result -> {
+            String id = result.get("peer_id");
+            String address = result.get("address");
+            if (!id.isEmpty() && !address.isEmpty()) {
+                int port = 9876;
+                String host = address;
+                if (address.contains(":")) {
+                    String[] parts = address.split(":");
+                    host = parts[0];
+                    try {
+                        port = Integer.parseInt(parts[1]);
+                    } catch (NumberFormatException ignored) {}
+                }
+                
+                JsonObject payload = new JsonObject();
+                payload.addProperty("peer_id", id);
+                payload.addProperty("address", host);
+                payload.addProperty("port", port);
+
+                IpcBridge.getInstance().send("add_peer", payload);
+                logToConsole("[Manual Connect] Sent request to connect to " + id + " at " + host + ":" + port);
+            }
+        });
+    }
+
     public void shutdown() {
         if (pollTimeline != null) {
             pollTimeline.stop();

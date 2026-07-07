@@ -130,8 +130,37 @@ func main() {
 	}
 	defer ipcServer.Stop()
 
-	// Start peer discovery
+	// Start connection manager with localPeerID
+	connMgr := network.NewConnectionManager(localPeerID)
+	if err := connMgr.StartServer(p2pPort); err != nil {
+		log.Printf("[Main] Failed to start P2P server: %v\n", err)
+		removePIDFile()
+		os.Exit(1)
+	}
+	defer connMgr.Stop()
+
+	// Initialize peer registry
 	peerRegistry := discovery.NewPeerRegistry()
+
+	// Hook up discovery event to trigger outward dials (Must register BEFORE starting discovery)
+	peerRegistry.OnPeerDiscovered = func(peer *discovery.Peer) {
+		// Don't connect to ourselves (in case mDNS broadcasts ourselves)
+		if peer.ID == localPeerID {
+			return
+		}
+
+		log.Printf("Connecting to discovered peer: %s (%s:%d)\n", peer.ID, peer.Address, peer.Port)
+		if err := connMgr.Connect(peer.ID, peer.Address, peer.Port); err != nil {
+			log.Printf("Failed to connect to peer %s: %v\n", peer.ID, err)
+		} else {
+			// Trigger a peer list update back to C++ when we successfully connect
+			if err := sendPeerList(peerRegistry, connMgr, ipcServer); err != nil {
+				log.Printf("Failed to update peer list: %v\n", err)
+			}
+		}
+	}
+
+	// Start peer discovery
 	mdnsServer, err := peerRegistry.StartDiscovery(localPeerID, p2pPort)
 	if err != nil {
 		log.Printf("[Main] Failed to start peer discovery: %v\n", err)
@@ -144,15 +173,6 @@ func main() {
 			mdnsServer.Shutdown()
 		}
 	}()
-
-	// Start connection manager with localPeerID
-	connMgr := network.NewConnectionManager(localPeerID)
-	if err := connMgr.StartServer(p2pPort); err != nil {
-		log.Printf("[Main] Failed to start P2P server: %v\n", err)
-		removePIDFile()
-		os.Exit(1)
-	}
-	defer connMgr.Stop()
 
 	// Read manual peer configurations from environment variable PEER_ADDRESSES (fallback when mDNS is blocked by router/firewall)
 	if envPeers := os.Getenv("PEER_ADDRESSES"); envPeers != "" {
@@ -194,29 +214,12 @@ func main() {
 	}
 	defer coord.Stop()
 
-	// Hook up discovery event to trigger outward dials
-	peerRegistry.OnPeerDiscovered = func(peer *discovery.Peer) {
-		// Don't connect to ourselves (in case mDNS broadcasts ourselves)
-		if peer.ID == localPeerID {
-			return
-		}
-
-		log.Printf("Connecting to discovered peer: %s (%s:%d)\n", peer.ID, peer.Address, peer.Port)
-		if err := connMgr.Connect(peer.ID, peer.Address, peer.Port); err != nil {
-			log.Printf("Failed to connect to peer %s: %v\n", peer.ID, err)
-		} else {
-			// Trigger a peer list update back to C++ when we successfully connect
-			if err := sendPeerList(peerRegistry, connMgr, ipcServer); err != nil {
-				log.Printf("Failed to update peer list: %v\n", err)
-			}
-		}
-	}
-
 	// Hook up connection lifecycle events to notify C++
 	connMgr.OnConnected = func(peerID string) {
 		if err := sendPeerList(peerRegistry, connMgr, ipcServer); err != nil {
 			log.Printf("Failed to update peer list: %v\n", err)
 		}
+		coord.SyncAllRepositoriesWithPeer(peerID)
 	}
 	connMgr.OnDisconnected = func(peerID string) {
 		if err := sendPeerList(peerRegistry, connMgr, ipcServer); err != nil {
@@ -252,6 +255,20 @@ func main() {
 		case "peer_list_request":
 			// Send peer list back to C++
 			return sendPeerList(peerRegistry, connMgr, ipcServer)
+		case "add_peer":
+			var p struct {
+				PeerID  string `json:"peer_id"`
+				Address string `json:"address"`
+				Port    int    `json:"port"`
+			}
+			if err := json.Unmarshal(msg.Payload, &p); err != nil {
+				return err
+			}
+			if p.Port == 0 {
+				p.Port = 9876
+			}
+			peerRegistry.AddManualPeer(p.PeerID, p.Address, p.Port)
+			return sendPeerList(peerRegistry, connMgr, ipcServer)
 		}
 		return nil
 	}
@@ -272,7 +289,9 @@ func main() {
 	<-sigChan
 
 	fmt.Println("Shutting down...")
-	healthSrv.Close()
+	if healthSrv != nil {
+		healthSrv.Close()
+	}
 }
 
 func handleFileChanged(msg *ipc.Message, connMgr *network.ConnectionManager) error {

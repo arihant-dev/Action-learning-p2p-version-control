@@ -414,6 +414,7 @@ func (sc *SyncCoordinator) HandlePeerMetadataUpdate(peerID string, repoID string
 			payload := map[string]interface{}{
 				"peer_id":   peerID,
 				"path":      path,
+				"repo_id":   repoID,
 				"is_delete": true,
 				"hash":      hash,
 				"timestamp": modifiedTime,
@@ -463,7 +464,7 @@ func (sc *SyncCoordinator) HandlePeerMetadataUpdate(peerID string, repoID string
 		if resolution.IsConflict {
 			sc.logAndNotifyConflict(repoID, path, localFV, remoteFV)
 		} else {
-			sc.sendMetadataUpdateToPeer(peerID, repoID, path, localVer, localHash, localTime, localMeta.IsDeleted)
+			sc.sendMetadataUpdateToPeer(peerID, repoID, path, localMeta.Size, localVer, localHash, localTime, localMeta.IsDeleted, localMeta.Mode)
 		}
 	case versioning.Skip:
 		// Identical hashes, do nothing
@@ -521,7 +522,7 @@ func (sc *SyncCoordinator) logAndNotifyConflict(repoID, path string, local, remo
 	sc.ipcServer.SendMessage(msg)
 }
 
-func (sc *SyncCoordinator) sendMetadataUpdateToPeer(peerID, repoID, path string, version uint64, hash string, modifiedTime int64, isDeleted bool) {
+func (sc *SyncCoordinator) sendMetadataUpdateToPeer(peerID, repoID, path string, size int64, version uint64, hash string, modifiedTime int64, isDeleted bool, mode uint32) {
 	p2pMsg := &ipc.Message{
 		Version:   "1.0",
 		Type:      "file_metadata_update",
@@ -532,10 +533,11 @@ func (sc *SyncCoordinator) sendMetadataUpdateToPeer(peerID, repoID, path string,
 		"repo_id":       repoID,
 		"path":          path,
 		"hash":          hash,
-		"size":          0,
+		"size":          size,
 		"version":       version,
 		"modified_time": modifiedTime,
 		"is_deleted":    isDeleted,
+		"mode":          mode,
 		"vector_clock":  sc.vectorClock.AsMap(),
 	}
 	payloadBytes, err := json.Marshal(updatePayload)
@@ -670,7 +672,7 @@ func (sc *SyncCoordinator) HandleP2PMessage(peerID string, msg *ipc.Message) err
 
 		// File is found locally. Start upload session.
 		transferID := fmt.Sprintf("up_%d_%s", time.Now().UnixNano(), meta.RepositoryID)
-		transferPort, err := sc.transferMgr.StartUpload(transferID, meta.Filepath, peerID, meta.Hash, meta.Size)
+		transferPort, err := sc.transferMgr.StartUpload(transferID, meta.Filepath, meta.RepositoryID, peerID, meta.Hash, meta.Size)
 		if err != nil {
 			log.Printf("[SyncCoordinator] StartUpload failed for %s: %v\n", payload.Path, err)
 			resp := &ipc.Message{
@@ -746,7 +748,7 @@ func (sc *SyncCoordinator) HandleP2PMessage(peerID string, msg *ipc.Message) err
 
 		// Start download session: connect to the peer's dynamic transferPort
 		transferID := fmt.Sprintf("dl_%d_%s", time.Now().UnixNano(), pDetails.repoID)
-		err = sc.transferMgr.StartDownload(transferID, payload.Path, peerID, payload.Hash, pDetails.size, host, payload.TransferPort, pDetails.mode)
+		err = sc.transferMgr.StartDownload(transferID, payload.Path, pDetails.repoID, peerID, payload.Hash, pDetails.size, host, payload.TransferPort, pDetails.mode)
 		if err != nil {
 			log.Printf("[SyncCoordinator] StartDownload failed: %v\n", err)
 		}
@@ -858,4 +860,32 @@ func (sc *SyncCoordinator) HandleIPCMessage(msg *ipc.Message) error {
 		return nil
 	}
 	return nil
+}
+
+// SyncAllRepositoriesWithPeer sends file_metadata_update messages for all files in all active repos to the given peer.
+func (sc *SyncCoordinator) SyncAllRepositoriesWithPeer(peerID string) {
+	sc.mu.RLock()
+	defer sc.mu.RUnlock()
+
+	repos, err := sc.db.Repositories().List()
+	if err != nil {
+		log.Printf("[SyncCoordinator] Error listing repos for sync: %v\n", err)
+		return
+	}
+
+	for _, repo := range repos {
+		if repo.Status != "active" {
+			continue
+		}
+		files, err := sc.db.Metadata().ListByRepository(repo.ID, false)
+		if err != nil {
+			log.Printf("[SyncCoordinator] Error listing metadata for repo %s: %v\n", repo.ID, err)
+			continue
+		}
+
+		log.Printf("[SyncCoordinator] Syncing %d files of repo %s with peer %s\n", len(files), repo.ID, peerID)
+		for _, f := range files {
+			sc.sendMetadataUpdateToPeer(peerID, repo.ID, f.Filepath, f.Size, uint64(f.Version), f.Hash, f.LocalLastModified, f.IsDeleted, f.Mode)
+		}
+	}
 }

@@ -45,7 +45,7 @@ func NewFileTransferManager(ipcServer *ipc.IpcServer) *FileTransferManager {
 
 // StartDownload initiates a file download. It connects to the peer's transfer port,
 // sets up a local listener for the C++ daemon to connect to, and proxies the bytes.
-func (ft *FileTransferManager) StartDownload(transferID, filePath, peerID, expectedHash string, expectedSize int64, peerAddr string, peerPort int, mode uint32) error {
+func (ft *FileTransferManager) StartDownload(transferID, filePath, repoID, peerID, expectedHash string, expectedSize int64, peerAddr string, peerPort int, mode uint32) error {
 	// 1. Connect to remote peer's TCP transfer socket
 	addr := net.JoinHostPort(peerAddr, strconv.Itoa(peerPort))
 	netConn, err := net.DialTimeout("tcp", addr, 10*time.Second)
@@ -87,6 +87,7 @@ func (ft *FileTransferManager) StartDownload(transferID, filePath, peerID, expec
 	payload := map[string]interface{}{
 		"transfer_id":   transferID,
 		"path":          filePath,
+		"repo_id":       repoID,
 		"peer_id":       peerID,
 		"transfer_port": localPort,
 		"expected_hash": expectedHash,
@@ -112,7 +113,7 @@ func (ft *FileTransferManager) StartDownload(transferID, filePath, peerID, expec
 
 // StartUpload sets up a P2P network port for a remote peer to connect to,
 // a local port for C++ to connect to, and streams the data from C++ to the peer.
-func (ft *FileTransferManager) StartUpload(transferID, filePath, peerID, expectedHash string, expectedSize int64) (int, error) {
+func (ft *FileTransferManager) StartUpload(transferID, filePath, repoID, peerID, expectedHash string, expectedSize int64) (int, error) {
 	// 1. Listen for P2P remote peer connection
 	netListener, err := net.Listen("tcp", ":0")
 	if err != nil {
@@ -153,6 +154,7 @@ func (ft *FileTransferManager) StartUpload(transferID, filePath, peerID, expecte
 	payload := map[string]interface{}{
 		"transfer_id":   transferID,
 		"path":          filePath,
+		"repo_id":       repoID,
 		"peer_id":       peerID,
 		"transfer_port": localPort,
 		"expected_hash": expectedHash,

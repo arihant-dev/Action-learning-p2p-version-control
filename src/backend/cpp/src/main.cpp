@@ -29,13 +29,17 @@ void print_usage(const char *program_name) {
     std::cout << "Example: " << program_name << " project-alpha /Users/arihant/sync /tmp/p2p_sync.sock\n";
 }
 
-void handle_ipc_message(const nlohmann::json &msg, const std::string &watch_path) {
+void handle_ipc_message(const nlohmann::json &msg, const std::string &my_repo_id, const std::string &watch_path) {
     try {
         std::string msg_type = msg.value("type", "");
         std::cout << "[C++ Daemon] Received IPC message: " << msg_type << "\n";
         
         if (msg_type == "prepare_file_transfer") {
             auto payload = msg.at("payload");
+            std::string msg_repo_id = payload.value("repo_id", "");
+            if (!msg_repo_id.empty() && msg_repo_id != my_repo_id) {
+                return;
+            }
             std::string transfer_id = payload.value("transfer_id", "");
             std::string path = payload.value("path", "");
             std::string peer_id = payload.value("peer_id", "");
@@ -56,6 +60,10 @@ void handle_ipc_message(const nlohmann::json &msg, const std::string &watch_path
         } 
         else if (msg_type == "sync_from_peer") {
             auto payload = msg.at("payload");
+            std::string msg_repo_id = payload.value("repo_id", "");
+            if (!msg_repo_id.empty() && msg_repo_id != my_repo_id) {
+                return;
+            }
             std::string path = payload.value("path", "");
             bool is_delete = payload.value("is_delete", false);
 
@@ -145,7 +153,7 @@ int main(int argc, char *argv[]) {
             while (ipc_client.is_connected() && !g_shutdown) {
                 nlohmann::json message;
                 if (ipc_client.read_message(message)) {
-                    handle_ipc_message(message, watch_path);
+                    handle_ipc_message(message, repo_id, watch_path);
                 } else {
                     // read_message disconnects on EOF/error
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
