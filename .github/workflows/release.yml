@@ -10,7 +10,11 @@ permissions:
 
 jobs:
   build-macos:
-    runs-on: macos-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-13, macos-latest]
+      fail-fast: false
     steps:
       - uses: actions/checkout@v4
 
@@ -26,15 +30,22 @@ jobs:
           cache: maven
 
       - name: Build macOS App Bundle
-        id: build
         run: |
           chmod +x mvnw
           VERSION="${GITHUB_REF_NAME#v}" ./build_macos.sh
-          echo "archive=$(ls target/P2PVersionControl-*.zip | head -1)" >> "$GITHUB_OUTPUT"
+
+      - name: Determine Architecture Name
+        id: arch
+        run: |
+          ARCH=$(uname -m)
+          if [ "$ARCH" = "x86_64" ]; then
+            ARCH="x64"
+          fi
+          echo "arch=$ARCH" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: P2PVersionControl-macos
+          name: P2PVersionControl-macos-${{ steps.arch.outputs.arch }}
           path: target/P2PVersionControl-*.zip
 
   build-linux:
@@ -77,6 +88,8 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
 
       - name: Create GitHub Release
         run: |
@@ -84,7 +97,7 @@ jobs:
           gh release create "$VERSION" \
             --title "$VERSION" \
             --generate-notes \
-            P2PVersionControl-macos/*.zip \
-            P2PVersionControl-linux/*.tar.gz
+            *.zip \
+            *.tar.gz
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

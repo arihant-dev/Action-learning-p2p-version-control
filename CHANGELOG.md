@@ -7,10 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-07-07
+
 ### Added
-- Automated release pipeline via GitHub Actions (macOS `.zip`, Linux `.tar.gz`)
-- Version injection into build scripts from git tags
-- Comprehensive project documentation (`README.md`)
+- Multi-architecture matrix builds in the GitHub Actions release workflow to produce native Intel (`x64`) and Apple Silicon (`arm64`) macOS app bundles.
+- Dynamic target architecture name suffix (`x64`/`arm64`) appended to generated macOS zip archives.
+
+### Fixed
+- Fixed macOS app packaging failures in `build_macos.sh` caused by iCloud/FileProvider metadata and dynamic `com.apple.FinderInfo` extended attributes.
 
 ## [1.0.0] - 2026-07-04
 

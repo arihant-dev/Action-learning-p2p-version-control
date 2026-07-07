@@ -1,11 +1,16 @@
 #!/bin/bash
 set -e
 
-VERSION="${VERSION:-1.0.0}"
+VERSION="${VERSION:-1.0.1}"
 APP_NAME="P2PVersionControl"
 
+ARCH=$(uname -m)
+if [ "$ARCH" = "x86_64" ]; then
+    ARCH="x64"
+fi
+
 echo "===================================================="
-echo " Building $APP_NAME for macOS (v$VERSION)"
+echo " Building $APP_NAME for macOS ($ARCH, v$VERSION)"
 echo "===================================================="
 
 # Check dependencies
@@ -82,13 +87,13 @@ cp -R "$TMP_BUILD_DIR/$APP_NAME.app" target/bundle/
 echo "--> 6. Creating distribution archive..."
 (
     cd target/bundle
-    zip -r "../${APP_NAME}-${VERSION}-macos.zip" "$APP_NAME.app"
+    zip -r "../${APP_NAME}-${VERSION}-macos-${ARCH}.zip" "$APP_NAME.app"
 )
 
 echo "===================================================="
 echo " Build Success!"
 echo "   Version: $VERSION"
 echo "   App Bundle: target/bundle/$APP_NAME.app"
-echo "   Archive:    target/${APP_NAME}-${VERSION}-macos.zip"
+echo "   Archive:    target/${APP_NAME}-${VERSION}-macos-${ARCH}.zip"
 echo " Launch with: open target/bundle/$APP_NAME.app"
 echo "===================================================="

@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-VERSION="${VERSION:-1.0.0}"
+VERSION="${VERSION:-1.0.1}"
 APP_NAME="P2PVersionControl"
 
 echo "===================================================="
