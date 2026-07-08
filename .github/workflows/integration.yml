@@ -1,0 +1,54 @@
+name: Integration Tests
+on:
+  push:
+    branches: [industry-shipping, master]
+  pull_request:
+    branches: [industry-shipping]
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Build Go coordinator
+        run: |
+          cd src/backend/go
+          go build -o ../../../build/go_coordinator .
+
+      - name: Setup CMake
+        uses: jwlawson/actions-setup-cmake@v2
+
+      - name: Install dependencies
+        run: sudo apt-get install -y libssl-dev
+
+      - name: Build C++ daemon
+        run: |
+          cd src/backend/cpp
+          cmake -B build
+          cmake --build build
+
+      - name: Build Java frontend
+        run: ./mvnw compile
+
+      - name: Run E2E integration tests
+        run: |
+          python3 .agents/skills/p2p-multi-agent-testing/scripts/integration_harness.py
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-logs
+          path: /tmp/p2p_*.log
