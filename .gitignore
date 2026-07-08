@@ -120,7 +120,7 @@ apidocs/
 *.lof
 
 # Agentic context (local agent knowledge graphs, not published)
-.agents/
+# .agents/  # Uncommented — agents version their output via branches
 
 # Local context (not published)
 .project_context.md
