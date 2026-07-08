@@ -249,6 +249,7 @@ These depend on changes from Phase 1 or each other:
 
 | Workstream | Branch | Phase | Status | Started | Completed |
 |-----------|--------|-------|--------|---------|-----------|
+| Roadmap | `ws/roadmap` | 0 | 🟢 Active | 2026-07-08 | — |
 | Architecture | `ws/architecture` | 1 | 🔲 Pending | — | — |
 | Security | `ws/security` | 1 | 🔲 Pending | — | — |
 | Java Frontend | `ws/java-frontend` | 1 | 🔲 Pending | — | — |
@@ -271,7 +272,9 @@ Workstreams should create ADRs in `docs/adr/` for significant design decisions:
 - `docs/adr/003-structured-logging.md` — Log format, levels, and transport
 - `docs/adr/004-native-watchers.md` — Platform-specific watcher implementation
 - `docs/adr/005-windows-port.md` — Named pipes vs Unix sockets on Windows
-- `docs/adr/006-file-transfer-chunking.md` — Chunk size, resume protocol, checksums
+- `docs/adr/0006-file-transfer-chunking.md` — Chunk size, resume protocol, checksums
+- `docs/adr/0007-delta-sync.md` — Delta sync strategy
+- `docs/adr/0008-conflict-resolution-ui.md` — Conflict resolution UX
 
 ---
 
