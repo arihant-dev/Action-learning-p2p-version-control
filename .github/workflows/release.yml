@@ -91,13 +91,22 @@ jobs:
         with:
           merge-multiple: true
 
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: ./
+          format: cyclonedx-json
+          output-file: p2p-sync-sbom.cdx.json
+
       - name: Create GitHub Release
+        id: create_release
         run: |
           VERSION="$GITHUB_REF_NAME"
           gh release create "$VERSION" \
             --title "$VERSION" \
             --generate-notes \
             *.zip \
-            *.tar.gz
+            *.tar.gz \
+            p2p-sync-sbom.cdx.json
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
