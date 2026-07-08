@@ -5,41 +5,50 @@
 
 #include <atomic>
 #include <csignal>
+#include <cstring>
+#include <cstdlib>
 #include <filesystem>
 #include <iostream>
 #include <nlohmann/json.hpp>
 #include <string>
 #include <thread>
 #include <chrono>
+
+#ifdef _WIN32
+#include <io.h>
+#define STDERR_FILENO 2
+#else
 #include <unistd.h>
+#endif
 
 namespace fs = std::filesystem;
 
 std::atomic<bool> g_shutdown(false);
 
-void signal_handler(int /*signal*/) {
-    // Only async-signal-safe operations here: write() to stderr, no cout/mutex
+void signal_handler(int) {
     const char msg[] = "\n[C++ Daemon] Received signal, shutting down...\n";
     (void)::write(STDERR_FILENO, msg, sizeof(msg) - 1);
     g_shutdown = true;
 }
 
-void print_usage(const char *program_name) {
-    std::cout << "Usage: " << program_name << " <repo_id> <watch_path> [ipc_socket_path]\n";
-    std::cout << "Example: " << program_name << " project-alpha /Users/arihant/sync /tmp/p2p_sync.sock\n";
+void print_usage(const char* program_name) {
+    std::cout << "Usage: " << program_name
+              << " <repo_id> <watch_path> [ipc_socket_path] [--poll-interval <ms>]\n";
+    std::cout << "Example: " << program_name
+              << " project-alpha /path/to/watch /tmp/p2p_sync.sock --poll-interval 500\n";
 }
 
-void handle_ipc_message(const nlohmann::json &msg, const std::string &my_repo_id, const std::string &watch_path) {
+void handle_ipc_message(const nlohmann::json& msg, const std::string& my_repo_id,
+                        const std::string& watch_path) {
     try {
         std::string msg_type = msg.value("type", "");
         std::cout << "[C++ Daemon] Received IPC message: " << msg_type << "\n";
-        
+
         if (msg_type == "prepare_file_transfer") {
             auto payload = msg.at("payload");
             std::string msg_repo_id = payload.value("repo_id", "");
-            if (!msg_repo_id.empty() && msg_repo_id != my_repo_id) {
-                return;
-            }
+            if (!msg_repo_id.empty() && msg_repo_id != my_repo_id) return;
+
             std::string transfer_id = payload.value("transfer_id", "");
             std::string path = payload.value("path", "");
             std::string peer_id = payload.value("peer_id", "");
@@ -49,25 +58,24 @@ void handle_ipc_message(const nlohmann::json &msg, const std::string &my_repo_id
             std::string direction = payload.value("direction", "download");
             uint32_t mode = payload.value("mode", 0);
 
-            std::cout << "[C++ Daemon] Handled prepare_file_transfer: ID=" << transfer_id 
-                      << ", path=" << path << ", port=" << transfer_port 
-                      << ", dir=" << direction << ", mode=" << std::oct << mode << std::dec << "\n";
+            std::cout << "[C++ Daemon] prepare_file_transfer: ID=" << transfer_id
+                      << ", path=" << path << ", port=" << transfer_port
+                      << ", dir=" << direction << "\n";
 
-            // Spawn background thread to perform transfer
             std::thread([=]() {
-                transfer::handle_file_transfer(watch_path, path, transfer_port, direction, expected_size, expected_hash, mode);
+                transfer::handle_file_transfer(
+                    watch_path, path, transfer_port, direction,
+                    expected_size, expected_hash, mode);
             }).detach();
-        } 
-        else if (msg_type == "sync_from_peer") {
+        } else if (msg_type == "sync_from_peer") {
             auto payload = msg.at("payload");
             std::string msg_repo_id = payload.value("repo_id", "");
-            if (!msg_repo_id.empty() && msg_repo_id != my_repo_id) {
-                return;
-            }
+            if (!msg_repo_id.empty() && msg_repo_id != my_repo_id) return;
+
             std::string path = payload.value("path", "");
             bool is_delete = payload.value("is_delete", false);
 
-            std::cout << "[C++ Daemon] Handled sync_from_peer: path=" << path 
+            std::cout << "[C++ Daemon] sync_from_peer: path=" << path
                       << ", is_delete=" << is_delete << "\n";
 
             if (is_delete) {
@@ -75,35 +83,44 @@ void handle_ipc_message(const nlohmann::json &msg, const std::string &my_repo_id
                 try {
                     if (fs::exists(target_path)) {
                         fs::remove(target_path);
-                        std::cout << "[C++ Daemon] Deleted file locally: " << target_path << "\n";
+                        std::cout << "[C++ Daemon] Deleted: " << target_path << "\n";
                     }
-                } catch (const std::exception &e) {
-                    std::cerr << "[C++ Daemon] Error deleting file: " << e.what() << "\n";
+                } catch (const std::exception& e) {
+                    std::cerr << "[C++ Daemon] Delete error: " << e.what() << "\n";
                 }
             }
         }
-    } catch (const std::exception &e) {
-        std::cerr << "[C++ Daemon] Error handling IPC message: " << e.what() << "\n";
+    } catch (const std::exception& e) {
+        std::cerr << "[C++ Daemon] IPC handler error: " << e.what() << "\n";
     }
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
     if (argc < 2) {
         print_usage(argv[0]);
         return 1;
     }
 
     std::string repo_id = "project-alpha";
-    std::string watch_path = "";
+    std::string watch_path;
     std::string ipc_socket = "/tmp/p2p_sync.sock";
+    int poll_interval_ms = 1000;
 
-    if (argc == 2) {
-        watch_path = argv[1];
-    } else {
-        repo_id = argv[1];
-        watch_path = argv[2];
-        if (argc >= 4) {
-            ipc_socket = argv[3];
+    int i = 1;
+    if (argc >= 2) {
+        repo_id = argv[i++];
+    }
+    if (argc >= 3) {
+        watch_path = argv[i++];
+    }
+
+    while (i < argc) {
+        if (std::strcmp(argv[i], "--poll-interval") == 0 && i + 1 < argc) {
+            poll_interval_ms = std::atoi(argv[++i]);
+            if (poll_interval_ms <= 0) poll_interval_ms = 1000;
+            ++i;
+        } else {
+            ipc_socket = argv[i++];
         }
     }
 
@@ -111,145 +128,138 @@ int main(int argc, char *argv[]) {
         ipc_socket = env_ipc;
     }
 
-    // Validate path exists
     if (!fs::exists(watch_path)) {
         std::cerr << "[C++ Daemon] Error: Watch path does not exist: " << watch_path << "\n";
         return 1;
     }
-
     if (!fs::is_directory(watch_path)) {
-        std::cerr << "[C++ Daemon] Error: Watch path is not a directory: " << watch_path << "\n";
+        std::cerr << "[C++ Daemon] Error: Not a directory: " << watch_path << "\n";
         return 1;
     }
 
     std::cout << "==========================================\n";
-    std::cout << " P2P File Sync - C++ Daemon (Cross-Platform)\n";
+    std::cout << " P2P File Sync - C++ Daemon\n";
     std::cout << " Repository ID   : " << repo_id << "\n";
     std::cout << " Watch Directory : " << watch_path << "\n";
     std::cout << " IPC Socket Path : " << ipc_socket << "\n";
+    std::cout << " Poll Interval   : " << poll_interval_ms << " ms\n";
     std::cout << "==========================================\n";
 
-    // Setup signal handlers
     std::signal(SIGINT, signal_handler);
     std::signal(SIGTERM, signal_handler);
-    std::signal(SIGPIPE, SIG_IGN); // Prevent termination on write to closed socket
+#ifndef _WIN32
+    std::signal(SIGPIPE, SIG_IGN);
+#endif
 
-    // Initialize IPC Client
-    ipc::IpcClient ipc_client;
-    
-    // Connect and read messages in a background thread so the daemon can start watching
-    // immediately and handle incoming messages when connected
+    auto ipc_client = IpcClient::create();
+
     std::thread ipc_thread([&]() {
-        std::cout << "[C++ Daemon] Background IPC worker started...\n";
+        std::cout << "[C++ Daemon] IPC worker started\n";
         while (!g_shutdown) {
-            if (!ipc_client.is_connected()) {
-                if (!ipc_client.connect(ipc_socket)) {
+            if (!ipc_client->isConnected()) {
+                if (!ipc_client->connect(ipc_socket)) {
                     std::this_thread::sleep_for(std::chrono::seconds(2));
                     continue;
                 }
             }
-
-            // Connection succeeded, enter read loop
-            while (ipc_client.is_connected() && !g_shutdown) {
-                nlohmann::json message;
-                if (ipc_client.read_message(message)) {
-                    handle_ipc_message(message, repo_id, watch_path);
+            while (ipc_client->isConnected() && !g_shutdown) {
+                std::string raw;
+                if (ipc_client->receive(raw)) {
+                    try {
+                        auto msg = nlohmann::json::parse(raw);
+                        handle_ipc_message(msg, repo_id, watch_path);
+                    } catch (...) {}
                 } else {
-                    // read_message disconnects on EOF/error
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 }
             }
         }
     });
 
-    // Create file watcher
-    FileSystemWatcher watcher(watch_path, g_shutdown);
-
-    // Callback for file changes
-    auto on_file_change = [&](const std::string &rel_path, const std::string &action) {
-        std::cout << "[C++ Daemon] Event detected: " << action << " -> " << rel_path << "\n";
-
-        // Print [JSON] line for test compatibility
-        nlohmann::json test_json;
-        test_json["filename"] = rel_path;
-        test_json["action"] = (action == "add") ? "created" : ((action == "delete") ? "deleted" : "modified");
-        std::cout << "[JSON] " << test_json.dump() << "\n" << std::flush;
-
-        fs::path abs_path = fs::path(watch_path) / rel_path;
-        
-        long long size = 0;
-        std::string hash = "";
-        long long modified_time = std::chrono::duration_cast<std::chrono::seconds>(
-            std::chrono::system_clock::now().time_since_epoch()
-        ).count();
-
-        uint32_t mode = 0;
-        if (action != "delete" && fs::exists(abs_path)) {
-            try {
-                size = fs::file_size(abs_path);
-                hash = crypto::sha256_file(abs_path.string());
-                
-                auto write_time = fs::last_write_time(abs_path);
-                auto sctp = std::chrono::file_clock::to_sys(write_time);
-                modified_time = std::chrono::duration_cast<std::chrono::seconds>(sctp.time_since_epoch()).count();
-
-                // Get file permissions mode
-                auto perms = fs::status(abs_path).permissions();
-                mode = static_cast<uint32_t>(perms);
-            } catch (const std::exception &e) {
-                std::cerr << "[C++ Daemon] Error processing file metadata: " << e.what() << "\n";
-                return; // Don't notify if we failed to read file metadata
+    auto watcher = createWatcher(
+        watch_path,
+        [&](const WatchEvent& event) {
+            std::string action;
+            switch (event.type) {
+                case WatchEventType::Created: action = "created"; break;
+                case WatchEventType::Modified: action = "modified"; break;
+                case WatchEventType::Deleted: action = "deleted"; break;
+                case WatchEventType::Moved: action = "moved"; break;
             }
-        }
 
-        // Package into standard Go/C++ IPC message contract
-        nlohmann::json message;
-        message["version"] = "1.0";
-        message["type"] = "file_changed";
-        message["id"] = "msg_cpp_" + std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
-        message["timestamp"] = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::system_clock::now().time_since_epoch()
-        ).count();
-        message["source"] = "cpp";
+            std::cout << "[C++ Daemon] Event: " << action << " -> " << event.path << "\n";
 
-        nlohmann::json payload;
-        payload["repo_id"] = repo_id;
-        payload["action"] = action;
-        payload["path"] = rel_path;
-        payload["hash"] = hash;
-        payload["size"] = size;
-        payload["modified_time"] = modified_time;
-        payload["mode"] = mode;
+            nlohmann::json test_json;
+            test_json["filename"] = event.path;
+            test_json["action"] = action;
+            std::cout << "[JSON] " << test_json.dump() << "\n" << std::flush;
 
-        message["payload"] = payload;
+            fs::path abs_path = fs::path(watch_path) / event.path;
 
-        if (ipc_client.is_connected()) {
-            std::cout << "[C++ Daemon] Sending IPC change: " << payload.dump() << "\n";
-            ipc_client.send_message(message);
-        } else {
-            std::cout << "[C++ Daemon] IPC disconnected, change not sent: " << payload.dump() << "\n";
-        }
-    };
+            long long size = 0;
+            std::string hash;
+            long long modified_time = std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::system_clock::now().time_since_epoch()
+            ).count();
+            uint32_t mode = 0;
 
-    // Start watching
-    if (!watcher.start(on_file_change)) {
-        std::cerr << "[C++ Daemon] Error: Failed to start file watcher\n";
+            if (event.type != WatchEventType::Deleted && fs::exists(abs_path)) {
+                try {
+                    size = fs::file_size(abs_path);
+                    crypto::sha256_file(abs_path.string(), hash);
+                    auto write_time = fs::last_write_time(abs_path);
+                    auto sctp = std::chrono::file_clock::to_sys(write_time);
+                    modified_time = std::chrono::duration_cast<std::chrono::seconds>(
+                        sctp.time_since_epoch()).count();
+                    auto perms = fs::status(abs_path).permissions();
+                    mode = static_cast<uint32_t>(perms);
+                } catch (const std::exception& e) {
+                    std::cerr << "[C++ Daemon] Metadata error: " << e.what() << "\n";
+                    return;
+                }
+            }
+
+            nlohmann::json message;
+            message["version"] = "1.0";
+            message["type"] = "file_changed";
+            message["id"] = "msg_cpp_" +
+                std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+            message["timestamp"] = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::system_clock::now().time_since_epoch()
+            ).count();
+            message["source"] = "cpp";
+
+            nlohmann::json payload;
+            payload["repo_id"] = repo_id;
+            payload["action"] = action;
+            payload["path"] = event.path;
+            payload["hash"] = hash;
+            payload["size"] = size;
+            payload["modified_time"] = modified_time;
+            payload["mode"] = mode;
+            message["payload"] = payload;
+
+            if (ipc_client->isConnected()) {
+                std::cout << "[C++ Daemon] Sending IPC change\n";
+                ipc_client->send(message.dump());
+            } else {
+                std::cout << "[C++ Daemon] IPC disconnected, change not sent\n";
+            }
+        },
+        std::chrono::milliseconds(poll_interval_ms));
+
+    if (!watcher || !watcher->start()) {
+        std::cerr << "[C++ Daemon] Failed to start file watcher\n";
         g_shutdown = true;
     }
 
-    // Keep running
     while (!g_shutdown) {
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }
 
-    watcher.stop();
-    
-    // Stop IPC connection thread
-    if (ipc_thread.joinable()) {
-        ipc_thread.join();
-    }
-    
-    ipc_client.disconnect();
+    if (watcher) watcher->stop();
+    if (ipc_thread.joinable()) ipc_thread.join();
+    ipc_client->disconnect();
     std::cout << "[C++ Daemon] Exited cleanly.\n";
 
     return 0;

@@ -1,138 +1,104 @@
 #include "filesystem_watcher.h"
-
 #include <iostream>
+#include <map>
 #include <set>
-#include <chrono>
+#include <filesystem>
+#include <thread>
 
 namespace fs = std::filesystem;
 
-FileSystemWatcher::FileSystemWatcher(const std::string &watch_path, std::atomic<bool> &shutdown)
-    : watch_path_(watch_path), shutdown_(shutdown) {}
-
-FileSystemWatcher::~FileSystemWatcher() {
-    stop();
-}
-
-bool FileSystemWatcher::start(FileChangeCallback callback) {
-    callback_ = callback;
-
-    try {
-        if (!fs::exists(watch_path_)) {
-            std::cerr << "[FileSystemWatcher] Error: Path does not exist: " << watch_path_ << "\n";
-            return false;
-        }
-
-        // 1. Initial scan to populate the known state and notify Go coordinator
-        scan_directory(true);
-        std::cout << "[FileSystemWatcher] Initial baseline scan complete. Watching: " << watch_path_ << "\n";
-
-        // 2. Start the polling thread
-        watch_thread_ = std::thread(&FileSystemWatcher::watch_loop, this);
-        return true;
-    } catch (const std::exception &e) {
-        std::cerr << "[FileSystemWatcher] Exception starting watcher: " << e.what() << "\n";
-        return false;
-    }
-}
+FileSystemWatcher::FileSystemWatcher(const std::string& watchPath, Callback callback)
+    : watchPath_(watchPath), callback_(std::move(callback)) {}
 
 void FileSystemWatcher::stop() {
-    shutdown_ = true;
-    if (watch_thread_.joinable()) {
-        watch_thread_.join();
-    }
-    std::cout << "[FileSystemWatcher] Stopped watching\n";
+    running_ = false;
 }
 
-void FileSystemWatcher::watch_loop() {
-    while (!shutdown_) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // Poll every 1 second
-        if (shutdown_) break;
+class PollingWatcher : public FileSystemWatcher {
+public:
+    PollingWatcher(const std::string& watchPath, Callback callback,
+                   std::chrono::milliseconds pollInterval)
+        : FileSystemWatcher(watchPath, std::move(callback))
+        , pollInterval_(pollInterval) {}
 
-        try {
-            scan_directory(true);
-        } catch (const std::exception &e) {
-            std::cerr << "[FileSystemWatcher] Error during directory scan: " << e.what() << "\n";
-        }
-    }
-}
-
-void FileSystemWatcher::scan_directory(bool notify) {
-    if (!fs::exists(watch_path_)) {
-        return;
+    bool start() override {
+        if (running_) return false;
+        running_ = true;
+        std::thread(&PollingWatcher::watchLoop, this).detach();
+        return true;
     }
 
-    std::set<std::string> seen_files;
+private:
+    std::chrono::milliseconds pollInterval_;
 
-    for (const auto &entry : fs::recursive_directory_iterator(watch_path_)) {
-        if (shutdown_) return;
+    void watchLoop() {
+        struct FileInfo {
+            fs::file_time_type lastWriteTime;
+            uintmax_t size;
+        };
+        std::map<std::string, FileInfo> knownFiles;
 
-        // Skip symlinks to prevent scanning files outside the watch directory
-        if (entry.is_symlink()) {
-            continue;
-        }
-
-        // Skip directories, only track regular files
-        if (!entry.is_regular_file()) {
-            continue;
-        }
-
-        try {
-            std::string abs_path = entry.path().string();
-            // Get relative path from watch_path_
-            std::string rel_path = fs::relative(entry.path(), watch_path_).string();
-
-            // Skip hidden files, dot-directories, python virtualenvs, node_modules, and build targets
-            if (rel_path.empty() || 
-                rel_path[0] == '.' || 
-                rel_path.find("/.") != std::string::npos || 
-                rel_path.find(".venv") != std::string::npos || 
-                rel_path.find("venv/") != std::string::npos || 
-                rel_path.find("node_modules/") != std::string::npos || 
-                rel_path.find("target/") != std::string::npos) {
+        while (running_) {
+            if (!fs::exists(watchPath_)) {
+                std::this_thread::sleep_for(pollInterval_);
                 continue;
             }
 
-            auto last_write = fs::last_write_time(entry);
-            auto size = entry.file_size();
+            std::set<std::string> seenFiles;
+            try {
+                for (const auto& entry : fs::recursive_directory_iterator(watchPath_)) {
+                    if (!running_) return;
+                    if (entry.is_symlink() || !entry.is_regular_file()) continue;
 
-            seen_files.insert(rel_path);
+                    std::string relPath = fs::relative(entry.path(), watchPath_).string();
+                    if (relPath.empty() || relPath[0] == '.') continue;
 
-            auto it = known_files_.find(rel_path);
-            if (it == known_files_.end()) {
-                // New file detected
-                known_files_[rel_path] = {last_write, size};
-                if (notify && callback_) {
-                    callback_(rel_path, "add");
-                }
-            } else {
-                // Check if file was modified
-                if (it->second.last_write_time != last_write || it->second.size != size) {
-                    it->second.last_write_time = last_write;
-                    it->second.size = size;
-                    if (notify && callback_) {
-                        callback_(rel_path, "modify");
+                    auto lwt = fs::last_write_time(entry);
+                    auto sz = entry.file_size();
+                    seenFiles.insert(relPath);
+
+                    auto it = knownFiles.find(relPath);
+                    if (it == knownFiles.end()) {
+                        knownFiles[relPath] = {lwt, sz};
+                        if (callback_) {
+                            WatchEvent ev{WatchEventType::Created, relPath, ""};
+                            callback_(ev);
+                        }
+                    } else if (it->second.lastWriteTime != lwt || it->second.size != sz) {
+                        it->second = {lwt, sz};
+                        if (callback_) {
+                            WatchEvent ev{WatchEventType::Modified, relPath, ""};
+                            callback_(ev);
+                        }
                     }
                 }
+            } catch (const std::exception& e) {
+                std::cerr << "[FileSystemWatcher] Scan error: " << e.what() << "\n";
             }
-        } catch (const std::exception &e) {
-            // Log scan error for individual files (e.g. permission denied) and continue
-            std::cerr << "[FileSystemWatcher] Warning: Failed to scan entry: " << entry.path() << " (" << e.what() << ")\n";
+
+            for (auto it = knownFiles.begin(); it != knownFiles.end();) {
+                if (seenFiles.find(it->first) == seenFiles.end()) {
+                    if (callback_) {
+                        WatchEvent ev{WatchEventType::Deleted, it->first, ""};
+                        callback_(ev);
+                    }
+                    it = knownFiles.erase(it);
+                } else {
+                    ++it;
+                }
+            }
+
+            std::this_thread::sleep_for(pollInterval_);
         }
     }
+};
 
-    // Check for deleted files
-    for (auto it = known_files_.begin(); it != known_files_.end();) {
-        if (shutdown_) return;
-
-        if (seen_files.find(it->first) == seen_files.end()) {
-            // File deleted
-            std::string deleted_path = it->first;
-            it = known_files_.erase(it); // Erase first to prevent callback accessing stale entry
-            if (notify && callback_) {
-                callback_(deleted_path, "delete");
-            }
-        } else {
-            ++it;
-        }
-    }
+#if !defined(__linux__) && !defined(__APPLE__) && !defined(_WIN32)
+std::unique_ptr<FileSystemWatcher> createWatcher(
+    const std::string& watchPath,
+    FileSystemWatcher::Callback callback,
+    std::chrono::milliseconds pollInterval)
+{
+    return std::make_unique<PollingWatcher>(watchPath, std::move(callback), pollInterval);
 }
+#endif
