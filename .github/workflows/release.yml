@@ -127,9 +127,27 @@ jobs:
           cd ..\..\..
 
           # Build C++ daemon
-          cmake -S src/backend/cpp -B src/backend/cpp/build -DCMAKE_BUILD_TYPE=Release
+          cmake -S src/backend/cpp -B src/backend/cpp/build
           cmake --build src/backend/cpp/build --config Release
-          cp src/backend/cpp/build/Release/p2p_daemon.exe build/
+
+          # CMake outputs to build/Release/p2p_daemon.exe on Windows (MSVC multi-config)
+          $candidates = @(
+            "src/backend/cpp/build/Release/p2p_daemon.exe",
+            "src/backend/cpp/build/bin/Release/p2p_daemon.exe",
+            "src/backend/cpp/build/bin/p2p_daemon.exe"
+          )
+          $found = $false
+          foreach ($c in $candidates) {
+            if (Test-Path $c) {
+              Copy-Item $c build/p2p_daemon.exe
+              $found = $true
+              Write-Host "Copied from: $c"
+              break
+            }
+          }
+          if (-not $found) {
+            throw "Cannot find p2p_daemon.exe build output. Searched: $($candidates -join ', ')"
+          }
 
       - name: Package Executables (.zip)
         run: |
