@@ -5,7 +5,12 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
 	"sync"
+	"syscall"
 	"time"
 
 	"p2p/pkg/ipc"
@@ -14,10 +19,6 @@ import (
 	"p2p/pkg/storage/sqlite"
 	"p2p/pkg/transfer"
 	"p2p/pkg/versioning"
-	"os"
-	"os/exec"
-	"syscall"
-	"path/filepath"
 )
 
 // SyncCoordinator coordinates multi-repository synchronization across the local
@@ -53,6 +54,12 @@ func NewSyncCoordinator(
 	connMgr *network.ConnectionManager,
 	localPeerID string,
 ) *SyncCoordinator {
+	globalConcurrency := 16
+	if s := os.Getenv("P2P_GLOBAL_CONCURRENCY"); s != "" {
+		if v, err := strconv.Atoi(s); err == nil && v > 0 {
+			globalConcurrency = v
+		}
+	}
 	return &SyncCoordinator{
 		db:               db,
 		ipcServer:        ipcServer,
@@ -62,7 +69,8 @@ func NewSyncCoordinator(
 		transferMgr:      transfer.NewFileTransferManager(ipcServer),
 		localPeerID:      localPeerID,
 		workers:          make(map[string]chan struct{}),
-		concurrencySem:   make(chan struct{}, 4), // Max 4 concurrent uploads/downloads
+		repoSemaphores:   make(map[string]chan struct{}),
+		globalSem:        make(chan struct{}, globalConcurrency),
 		stopChan:         make(chan struct{}),
 		pendingDownloads: make(map[string]pendingDownload),
 		lamportClock:     versioning.NewLamportClock(),
@@ -116,6 +124,16 @@ func (sc *SyncCoordinator) startRepoWorkerLocked(repoID string) {
 	}
 	stopCh := make(chan struct{})
 	sc.workers[repoID] = stopCh
+
+	repoConcurrency := 2
+	if s := os.Getenv("P2P_REPO_CONCURRENCY"); s != "" {
+		if v, err := strconv.Atoi(s); err == nil && v > 0 {
+			repoConcurrency = v
+		}
+	}
+	if _, exists := sc.repoSemaphores[repoID]; !exists {
+		sc.repoSemaphores[repoID] = make(chan struct{}, repoConcurrency)
+	}
 
 	sc.wg.Add(1)
 	go func() {
@@ -571,17 +589,34 @@ func (sc *SyncCoordinator) queueProcessorLoop() {
 				continue
 			}
 
-			// Acquire concurrency slot (bandwidth scheduling)
+			sc.mu.RLock()
+			repoSem, hasRepoSem := sc.repoSemaphores[task.RepoID]
+			sc.mu.RUnlock()
+			if !hasRepoSem {
+				log.Printf("[SyncCoordinator] No semaphore for repo %s, skipping task\n", task.RepoID)
+				continue
+			}
+
 			select {
-			case sc.concurrencySem <- struct{}{}:
-				// Slot acquired, process sync task
-				go func(t *SyncTask) {
-					defer func() { <-sc.concurrencySem }()
-					sc.executeSyncTask(t)
-				}(task)
 			case <-sc.stopChan:
 				return
+			case sc.globalSem <- struct{}{}:
 			}
+
+			select {
+			case <-sc.stopChan:
+				<-sc.globalSem
+				return
+			case repoSem <- struct{}{}:
+			}
+
+			go func(t *SyncTask) {
+				defer func() {
+					<-repoSem
+					<-sc.globalSem
+				}()
+				sc.executeSyncTask(t)
+			}(task)
 		}
 	}
 }

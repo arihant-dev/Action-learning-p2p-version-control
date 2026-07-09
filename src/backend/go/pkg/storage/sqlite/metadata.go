@@ -18,6 +18,7 @@ type FileMetadata struct {
 	IsDeleted         bool  // Tombstone flag
 	UpdatedAt         int64 // Unix milliseconds
 	Mode              uint32
+	VectorClock       string `json:"vector_clock"` // JSON-serialized map[string]uint64
 }
 
 // MetadataStore provides CRUD operations on the file_metadata table.
@@ -38,8 +39,8 @@ func (s *MetadataStore) Save(m *FileMetadata) error {
 
 	_, err := s.db.Exec(`
 		INSERT INTO file_metadata
-			(repository_id, filepath, hash, size, version, local_last_modified, is_deleted, updated_at, mode)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			(repository_id, filepath, hash, size, version, local_last_modified, is_deleted, updated_at, mode, vector_clock)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(repository_id, filepath) DO UPDATE SET
 			hash                = excluded.hash,
 			size                = excluded.size,
@@ -47,9 +48,10 @@ func (s *MetadataStore) Save(m *FileMetadata) error {
 			local_last_modified = excluded.local_last_modified,
 			is_deleted          = excluded.is_deleted,
 			updated_at          = excluded.updated_at,
-			mode                = excluded.mode
+			mode                = excluded.mode,
+			vector_clock        = excluded.vector_clock
 	`, m.RepositoryID, m.Filepath, m.Hash, m.Size, m.Version,
-		m.LocalLastModified, deleted, m.UpdatedAt, m.Mode)
+		m.LocalLastModified, deleted, m.UpdatedAt, m.Mode, m.VectorClock)
 	if err != nil {
 		return fmt.Errorf("save file metadata: %w", err)
 	}
@@ -63,12 +65,12 @@ func (s *MetadataStore) Get(repoID, filepath string) (*FileMetadata, error) {
 	var deleted int
 	err := s.db.QueryRow(`
 		SELECT repository_id, filepath, hash, size, version,
-		       local_last_modified, is_deleted, updated_at, mode
+		       local_last_modified, is_deleted, updated_at, mode, vector_clock
 		FROM file_metadata
 		WHERE repository_id = ? AND filepath = ?
 	`, repoID, filepath).Scan(
 		&m.RepositoryID, &m.Filepath, &m.Hash, &m.Size, &m.Version,
-		&m.LocalLastModified, &deleted, &m.UpdatedAt, &m.Mode,
+		&m.LocalLastModified, &deleted, &m.UpdatedAt, &m.Mode, &m.VectorClock,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -87,12 +89,12 @@ func (s *MetadataStore) GetByPathAndHash(filepath, hash string) (*FileMetadata, 
 	var deleted int
 	err := s.db.QueryRow(`
 		SELECT repository_id, filepath, hash, size, version,
-		       local_last_modified, is_deleted, updated_at, mode
+		       local_last_modified, is_deleted, updated_at, mode, vector_clock
 		FROM file_metadata
 		WHERE filepath = ? AND hash = ? AND is_deleted = 0
 	`, filepath, hash).Scan(
 		&m.RepositoryID, &m.Filepath, &m.Hash, &m.Size, &m.Version,
-		&m.LocalLastModified, &deleted, &m.UpdatedAt, &m.Mode,
+		&m.LocalLastModified, &deleted, &m.UpdatedAt, &m.Mode, &m.VectorClock,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -109,7 +111,7 @@ func (s *MetadataStore) GetByPathAndHash(filepath, hash string) (*FileMetadata, 
 func (s *MetadataStore) ListByRepository(repoID string, includeDeleted bool) ([]*FileMetadata, error) {
 	query := `
 		SELECT repository_id, filepath, hash, size, version,
-		       local_last_modified, is_deleted, updated_at, mode
+		       local_last_modified, is_deleted, updated_at, mode, vector_clock
 		FROM file_metadata
 		WHERE repository_id = ?
 	`
@@ -130,7 +132,7 @@ func (s *MetadataStore) ListByRepository(repoID string, includeDeleted bool) ([]
 		var deleted int
 		if err := rows.Scan(
 			&m.RepositoryID, &m.Filepath, &m.Hash, &m.Size, &m.Version,
-			&m.LocalLastModified, &deleted, &m.UpdatedAt, &m.Mode,
+			&m.LocalLastModified, &deleted, &m.UpdatedAt, &m.Mode, &m.VectorClock,
 		); err != nil {
 			return nil, fmt.Errorf("scan file metadata: %w", err)
 		}

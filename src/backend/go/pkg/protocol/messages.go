@@ -283,6 +283,9 @@ type FileResponsePayload struct {
 	Path          string `json:"path"`
 	Hash          string `json:"hash"`
 	ContentBase64 string `json:"content_base64,omitempty"`
+	FileContent   string `json:"file_content,omitempty"`  // Base64 for files <1MB
+	ContentHash   string `json:"content_hash,omitempty"`
+	ContentSize   int64  `json:"content_size,omitempty"`
 	TransferPort  int    `json:"transfer_port,omitempty"`
 	Error         string `json:"error,omitempty"`
 }
@@ -298,8 +301,8 @@ func (p *FileResponsePayload) Validate() error {
 	if p.Hash == "" {
 		return errors.New("hash cannot be empty on successful response")
 	}
-	if p.ContentBase64 == "" && p.TransferPort <= 0 {
-		return errors.New("either content_base64 or transfer_port must be populated")
+	if p.ContentBase64 == "" && p.FileContent == "" && p.TransferPort <= 0 {
+		return errors.New("either content_base64, file_content, or transfer_port must be populated")
 	}
 	if p.TransferPort > 65535 {
 		return fmt.Errorf("invalid transfer port: %d", p.TransferPort)

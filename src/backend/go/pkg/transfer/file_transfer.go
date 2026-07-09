@@ -4,38 +4,35 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"strconv"
 	"sync"
 	"time"
 
 	"p2p/pkg/ipc"
+	"p2p/pkg/log"
 )
 
-// TransferSession represents an active or preparing file transfer session.
 type TransferSession struct {
 	mu           sync.Mutex
 	TransferID   string
 	FilePath     string
 	PeerID       string
-	Type         string // "download" or "upload"
+	Type         string
 	LocalPort    int
 	LocalList    net.Listener
-	NetConn      net.Conn // P2P network connection
-	Status       string   // "preparing", "streaming", "completed", "failed"
+	NetConn      net.Conn
+	Status       string
 	ExpectedSize int64
 	Error        error
 }
 
-// FileTransferManager manages local socket handovers and streams raw file data.
 type FileTransferManager struct {
 	ipcServer *ipc.IpcServer
 	sessions  map[string]*TransferSession
 	mu        sync.RWMutex
 }
 
-// NewFileTransferManager creates a new FileTransferManager.
 func NewFileTransferManager(ipcServer *ipc.IpcServer) *FileTransferManager {
 	return &FileTransferManager{
 		ipcServer: ipcServer,
@@ -43,17 +40,13 @@ func NewFileTransferManager(ipcServer *ipc.IpcServer) *FileTransferManager {
 	}
 }
 
-// StartDownload initiates a file download. It connects to the peer's transfer port,
-// sets up a local listener for the C++ daemon to connect to, and proxies the bytes.
 func (ft *FileTransferManager) StartDownload(transferID, filePath, repoID, peerID, expectedHash string, expectedSize int64, peerAddr string, peerPort int, mode uint32) error {
-	// 1. Connect to remote peer's TCP transfer socket
 	addr := net.JoinHostPort(peerAddr, strconv.Itoa(peerPort))
 	netConn, err := net.DialTimeout("tcp", addr, 10*time.Second)
 	if err != nil {
 		return fmt.Errorf("failed to connect to remote peer transfer port %s: %w", addr, err)
 	}
 
-	// 2. Start local listener for C++ socket handover
 	localListener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		netConn.Close()
@@ -77,7 +70,6 @@ func (ft *FileTransferManager) StartDownload(transferID, filePath, repoID, peerI
 	ft.sessions[transferID] = session
 	ft.mu.Unlock()
 
-	// 3. Send IPC request to C++ to connect and write the file
 	msg := &ipc.Message{
 		Version:   "1.0",
 		Type:      "prepare_file_transfer",
@@ -105,27 +97,29 @@ func (ft *FileTransferManager) StartDownload(transferID, filePath, repoID, peerI
 
 	ft.ipcServer.SendMessage(msg)
 
-	// 4. Stream in background
 	go ft.streamDownload(session)
 
 	return nil
 }
 
-// StartUpload sets up a P2P network port for a remote peer to connect to,
-// a local port for C++ to connect to, and streams the data from C++ to the peer.
-func (ft *FileTransferManager) StartUpload(transferID, filePath, repoID, peerID, expectedHash string, expectedSize int64) (int, error) {
-	// 1. Listen for P2P remote peer connection
+func (ft *FileTransferManager) StartUpload(transferID, filePath, repoID, peerID, expectedHash string, expectedSize int64) (int, string, error) {
+	if expectedSize <= 1024 {
+		data, err := readFileForUpload(filePath)
+		if err == nil {
+			return 0, data, nil
+		}
+	}
+
 	netListener, err := net.Listen("tcp", ":0")
 	if err != nil {
-		return 0, fmt.Errorf("failed to listen on P2P network port: %w", err)
+		return 0, "", fmt.Errorf("failed to listen on P2P network port: %w", err)
 	}
 	netPort := netListener.Addr().(*net.TCPAddr).Port
 
-	// 2. Listen for local C++ connection
 	localListener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		netListener.Close()
-		return 0, fmt.Errorf("failed to listen on local transfer port: %w", err)
+		return 0, "", fmt.Errorf("failed to listen on local transfer port: %w", err)
 	}
 	localPort := localListener.Addr().(*net.TCPAddr).Port
 
@@ -144,7 +138,6 @@ func (ft *FileTransferManager) StartUpload(transferID, filePath, repoID, peerID,
 	ft.sessions[transferID] = session
 	ft.mu.Unlock()
 
-	// 3. Send IPC request to C++ to connect and stream/read the file
 	msg := &ipc.Message{
 		Version:   "1.0",
 		Type:      "prepare_file_transfer",
@@ -165,16 +158,15 @@ func (ft *FileTransferManager) StartUpload(transferID, filePath, repoID, peerID,
 	if err != nil {
 		netListener.Close()
 		localListener.Close()
-		return 0, fmt.Errorf("marshal upload payload: %w", err)
+		return 0, "", fmt.Errorf("marshal upload payload: %w", err)
 	}
 	msg.Payload = payloadBytes
 
 	ft.ipcServer.SendMessage(msg)
 
-	// 4. Accept connections and stream in background
 	go ft.streamUpload(session, netListener)
 
-	return netPort, nil
+	return netPort, "", nil
 }
 
 func (ft *FileTransferManager) streamDownload(session *TransferSession) {
@@ -186,7 +178,7 @@ func (ft *FileTransferManager) streamDownload(session *TransferSession) {
 	}
 	localConn, err := session.LocalList.Accept()
 	if err != nil {
-		log.Printf("[FileTransferManager] C++ failed to connect to local download socket: %v\n", err)
+		log.NewLogger("FileTransferManager").Error().Err(err).Msg("C++ failed to connect to local download socket")
 		ft.finishSession(session, fmt.Errorf("C++ connect timeout: %w", err))
 		return
 	}
@@ -196,21 +188,19 @@ func (ft *FileTransferManager) streamDownload(session *TransferSession) {
 	session.Status = "streaming"
 	session.mu.Unlock()
 
-	// Set deadlines to avoid socket leakage on network hangs
 	_ = session.NetConn.SetReadDeadline(time.Now().Add(30 * time.Second))
 	_ = localConn.SetWriteDeadline(time.Now().Add(30 * time.Second))
 
-	// Copy from network peer connection to local C++ connection
 	limitReader := io.LimitReader(session.NetConn, session.ExpectedSize)
 	copied, err := io.Copy(localConn, limitReader)
 	if err != nil {
-		log.Printf("[FileTransferManager] Download streaming error: %v\n", err)
+		log.NewLogger("FileTransferManager").Error().Err(err).Msg("Download streaming error")
 		ft.finishSession(session, err)
 		return
 	}
 
 	if copied != session.ExpectedSize {
-		log.Printf("[FileTransferManager] Download size mismatch: got %d, expected %d\n", copied, session.ExpectedSize)
+		log.NewLogger("FileTransferManager").Warn().Int64("got", copied).Int64("expected", session.ExpectedSize).Msg("Download size mismatch")
 		ft.finishSession(session, fmt.Errorf("size mismatch: got %d, expected %d", copied, session.ExpectedSize))
 		return
 	}
@@ -227,7 +217,7 @@ func (ft *FileTransferManager) streamUpload(session *TransferSession, netListene
 	}
 	netConn, err := netListener.Accept()
 	if err != nil {
-		log.Printf("[FileTransferManager] Remote peer failed to connect for upload: %v\n", err)
+		log.NewLogger("FileTransferManager").Error().Err(err).Msg("Remote peer failed to connect for upload")
 		ft.finishSession(session, fmt.Errorf("remote peer connect timeout: %w", err))
 		return
 	}
@@ -239,7 +229,7 @@ func (ft *FileTransferManager) streamUpload(session *TransferSession, netListene
 	}
 	localConn, err := session.LocalList.Accept()
 	if err != nil {
-		log.Printf("[FileTransferManager] C++ failed to connect to local upload socket: %v\n", err)
+		log.NewLogger("FileTransferManager").Error().Err(err).Msg("C++ failed to connect to local upload socket")
 		ft.finishSession(session, fmt.Errorf("C++ connect timeout: %w", err))
 		return
 	}
@@ -249,21 +239,19 @@ func (ft *FileTransferManager) streamUpload(session *TransferSession, netListene
 	session.Status = "streaming"
 	session.mu.Unlock()
 
-	// Set deadlines to avoid socket leakage on network hangs
 	_ = localConn.SetReadDeadline(time.Now().Add(30 * time.Second))
 	_ = session.NetConn.SetWriteDeadline(time.Now().Add(30 * time.Second))
 
-	// Copy from local C++ connection to network peer connection
 	limitReader := io.LimitReader(localConn, session.ExpectedSize)
 	copied, err := io.Copy(session.NetConn, limitReader)
 	if err != nil {
-		log.Printf("[FileTransferManager] Upload streaming error: %v\n", err)
+		log.NewLogger("FileTransferManager").Error().Err(err).Msg("Upload streaming error")
 		ft.finishSession(session, err)
 		return
 	}
 
 	if copied != session.ExpectedSize {
-		log.Printf("[FileTransferManager] Upload size mismatch: got %d, expected %d\n", copied, session.ExpectedSize)
+		log.NewLogger("FileTransferManager").Warn().Int64("got", copied).Int64("expected", session.ExpectedSize).Msg("Upload size mismatch")
 		ft.finishSession(session, fmt.Errorf("size mismatch: got %d, expected %d", copied, session.ExpectedSize))
 		return
 	}
@@ -281,7 +269,6 @@ func (ft *FileTransferManager) finishSession(session *TransferSession, err error
 	}
 	session.mu.Unlock()
 
-	// Purge old sessions when map grows too large (prevent memory leak)
 	ft.mu.Lock()
 	if len(ft.sessions) > 1000 {
 		for id, s := range ft.sessions {
@@ -315,14 +302,17 @@ func (ft *FileTransferManager) finishSession(session *TransferSession, err error
 	}
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
-		log.Printf("[FileTransferManager] Failed to marshal completion payload: %v\n", err)
+		log.NewLogger("FileTransferManager").Error().Err(err).Msg("Failed to marshal completion payload")
 	} else {
 		completeMsg.Payload = payloadBytes
 		ft.ipcServer.SendMessage(completeMsg)
 	}
 }
 
-// GetSession returns a copy of a session state.
+func readFileForUpload(path string) (string, error) {
+	return "", fmt.Errorf("not implemented")
+}
+
 func (ft *FileTransferManager) GetSession(transferID string) (TransferSession, bool) {
 	ft.mu.RLock()
 	s, exists := ft.sessions[transferID]
@@ -344,7 +334,6 @@ func (ft *FileTransferManager) GetSession(transferID string) (TransferSession, b
 	}, true
 }
 
-// GetSessions returns a copy of all active/completed transfer sessions.
 func (ft *FileTransferManager) GetSessions() []TransferSession {
 	ft.mu.RLock()
 	defer ft.mu.RUnlock()

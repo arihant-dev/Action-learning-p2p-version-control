@@ -3,15 +3,17 @@ package sync
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 
 	"p2p/pkg/versioning"
 )
 
 func serializeVectorClock(vc *versioning.VectorClock) (string, error) {
-	data, err := json.Marshal(vc)
+	if vc == nil {
+		return "{}", nil
+	}
+	data, err := json.Marshal(vc.AsMap())
 	if err != nil {
-		return "", fmt.Errorf("serialize vector clock: %w", err)
+		return "{}", err
 	}
 	return string(data), nil
 }
@@ -21,9 +23,11 @@ func deserializeVectorClock(data string) (*versioning.VectorClock, error) {
 		return versioning.NewVectorClock(), nil
 	}
 	vc := versioning.NewVectorClock()
-	if err := json.Unmarshal([]byte(data), vc); err != nil {
+	m := make(map[string]uint64)
+	if err := json.Unmarshal([]byte(data), &m); err != nil {
 		return nil, fmt.Errorf("deserialize vector clock: %w", err)
 	}
+	vc.Merge(m)
 	return vc, nil
 }
 
