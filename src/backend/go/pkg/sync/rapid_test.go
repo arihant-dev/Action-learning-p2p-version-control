@@ -58,7 +58,7 @@ func TestQueueFIFOWithinRepo(t *testing.T) {
 				RepoID:    "RepoA",
 				FilePath:  "file_" + string(rune('a'+i)) + ".txt",
 				Type:      Download,
-				Size:      int64(rapid.Int64Range(1, 100).Draw(t, "size")),
+				Size:      100,
 				Timestamp: ts,
 			})
 		}

@@ -39,7 +39,8 @@ type SyncCoordinator struct {
 	localPeerID      string
 	mu               sync.RWMutex
 	workers          map[string]chan struct{} // repoID -> stop channel
-	concurrencySem   chan struct{}            // semaphore for concurrent P2P transfers
+	repoSemaphores   map[string]chan struct{} // per-repository concurrency control
+	globalSem        chan struct{}            // global parent semaphore
 	stopChan         chan struct{}
 	wg               sync.WaitGroup
 	pendingDownloads map[string]pendingDownload // path:hash -> pendingDetails
@@ -713,7 +714,7 @@ func (sc *SyncCoordinator) HandleP2PMessage(peerID string, msg *ipc.Message) err
 
 		// File is found locally. Start upload session.
 		transferID := fmt.Sprintf("up_%d_%s", time.Now().UnixNano(), meta.RepositoryID)
-		transferPort, err := sc.transferMgr.StartUpload(transferID, meta.Filepath, meta.RepositoryID, peerID, meta.Hash, meta.Size)
+		transferPort, inlineData, err := sc.transferMgr.StartUpload(transferID, meta.Filepath, meta.RepositoryID, peerID, meta.Hash, meta.Size)
 		if err != nil {
 			log.Printf("[SyncCoordinator] StartUpload failed for %s: %v\n", payload.Path, err)
 			resp := &ipc.Message{
@@ -739,11 +740,16 @@ func (sc *SyncCoordinator) HandleP2PMessage(peerID string, msg *ipc.Message) err
 			Source:    "go",
 			Timestamp: time.Now().UnixNano() / int64(time.Millisecond),
 		}
-		respPayload, _ := json.Marshal(protocol.FileResponsePayload{
-			Path:         payload.Path,
-			Hash:         payload.Hash,
-			TransferPort: transferPort,
-		})
+		fileResp := protocol.FileResponsePayload{
+			Path: payload.Path,
+			Hash: payload.Hash,
+		}
+		if inlineData != "" {
+			fileResp.ContentBase64 = inlineData
+		} else {
+			fileResp.TransferPort = transferPort
+		}
+		respPayload, _ := json.Marshal(fileResp)
 		resp.Payload = respPayload
 		_ = sc.connMgr.SendToPeer(peerID, resp)
 		return nil

@@ -33,14 +33,13 @@ func BenchmarkBroadcastParallel(b *testing.B) {
 
 func BenchmarkHandshakeSerialization(b *testing.B) {
 	payload := HandshakePayload{
-		PeerID:       "bench-peer-001",
-		Capabilities: []string{CapZstdCompression},
+		PeerID: "bench-peer-001",
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		data, _ := json.Marshal(payload)
 		var decoded HandshakePayload
-		json.Unmarshal(data, &decoded)
+		_ = json.Unmarshal(data, &decoded)
 	}
 	b.StopTimer()
 }
@@ -53,6 +52,16 @@ func BenchmarkSendToPeer(b *testing.B) {
 	defer server.Close()
 	defer cm.CloseConnection("target")
 
+	go func() {
+		buf := make([]byte, 4096)
+		for {
+			_, err := server.Read(buf)
+			if err != nil {
+				return
+			}
+		}
+	}()
+
 	msg := &ipc.Message{
 		Version: "1.0",
 		Type:    "bench",
@@ -61,6 +70,6 @@ func BenchmarkSendToPeer(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		cm.SendToPeer("target", msg)
+		_ = cm.SendToPeer("target", msg)
 	}
 }

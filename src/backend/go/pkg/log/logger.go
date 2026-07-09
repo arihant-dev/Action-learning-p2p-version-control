@@ -42,13 +42,14 @@ func NextCorrelationID() string {
 	return strconv.FormatUint(n, 36)
 }
 
-func NewLogger(component string) zerolog.Logger {
-	return zerolog.New(os.Stderr).
+func NewLogger(component string) *zerolog.Logger {
+	l := zerolog.New(os.Stderr).
 		With().
 		Timestamp().
 		Str("component", component).
 		Caller().
 		Logger()
+	return &l
 }
 
 func SetLogLevel(l zerolog.Level) {

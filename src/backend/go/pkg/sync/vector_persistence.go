@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"p2p/pkg/log"
 	"p2p/pkg/versioning"
 )
 
@@ -46,7 +47,7 @@ func (sc *SyncCoordinator) loadVectorClocks() error {
 			if f.VectorClock != "" {
 				vc, err := deserializeVectorClock(f.VectorClock)
 				if err != nil {
-					zlog.Warn().Err(err).Str("repo_id", repo.ID).Str("file", f.Filepath).Msg("Failed to deserialize vector clock")
+					log.NewLogger("VectorPersistence").Warn().Err(err).Str("repo_id", repo.ID).Str("file", f.Filepath).Msg("Failed to deserialize vector clock")
 					continue
 				}
 				sc.vectorClock.Merge(vc.AsMap())
@@ -80,7 +81,7 @@ func (sc *SyncCoordinator) PersistAllVectorClocks() error {
 	for _, repo := range repos {
 		files, err := sc.db.Metadata().ListByRepository(repo.ID, false)
 		if err != nil {
-			zlog.Warn().Err(err).Str("repo_id", repo.ID).Msg("Failed to list metadata for repo")
+			log.NewLogger("VectorPersistence").Warn().Err(err).Str("repo_id", repo.ID).Msg("Failed to list metadata for repo")
 			continue
 		}
 		for _, f := range files {
@@ -90,7 +91,7 @@ func (sc *SyncCoordinator) PersistAllVectorClocks() error {
 			}
 			f.VectorClock = vcJSON
 			if err := sc.db.Metadata().Save(f); err != nil {
-				zlog.Warn().Err(err).Str("repo_id", repo.ID).Str("file", f.Filepath).Msg("Failed to save vector clock")
+				log.NewLogger("VectorPersistence").Warn().Err(err).Str("repo_id", repo.ID).Str("file", f.Filepath).Msg("Failed to save vector clock")
 			}
 		}
 	}

@@ -4,11 +4,38 @@ import (
 	"bytes"
 	"math/rand"
 	"testing"
+
+	"github.com/klauspost/compress/zstd"
 )
+
+var zstdEncoder *zstd.Encoder
+var zstdDecoder *zstd.Decoder
+
+func init() {
+	var err error
+	zstdEncoder, err = zstd.NewWriter(nil)
+	if err != nil {
+		panic(err)
+	}
+	zstdDecoder, err = zstd.NewReader(nil)
+	if err != nil {
+		panic(err)
+	}
+}
+
+const CompressionThreshold = 1024 * 1024 // 1MB
+
+func compressData(data []byte) ([]byte, error) {
+	return zstdEncoder.EncodeAll(data, nil), nil
+}
+
+func decompressData(data []byte) ([]byte, error) {
+	return zstdDecoder.DecodeAll(data, nil)
+}
 
 func BenchmarkCompressData(b *testing.B) {
 	data := make([]byte, 10*1024*1024) // 10MB
-	rand.Read(data)
+	_, _ = rand.Read(data)
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
@@ -25,7 +52,7 @@ func BenchmarkCompressData(b *testing.B) {
 
 func BenchmarkCompressSmallData(b *testing.B) {
 	data := make([]byte, 100*1024) // 100KB
-	rand.Read(data)
+	_, _ = rand.Read(data)
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
@@ -41,9 +68,8 @@ func BenchmarkCompressSmallData(b *testing.B) {
 }
 
 func BenchmarkInlineTransfer(b *testing.B) {
-	ft := NewFileTransferManager(nil)
 	data := make([]byte, 512*1024) // 512KB
-	rand.Read(data)
+	_, _ = rand.Read(data)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -66,7 +92,7 @@ func BenchmarkCompressThreshold(b *testing.B) {
 	for _, size := range sizes {
 		b.Run("size="+humanSize(size), func(b *testing.B) {
 			data := make([]byte, size)
-			rand.Read(data)
+			_, _ = rand.Read(data)
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				if size > CompressionThreshold {

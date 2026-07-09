@@ -296,7 +296,7 @@ func TestFileTransferUploadStreaming(t *testing.T) {
 	ft := NewFileTransferManager(ipcServer)
 
 	mockData := "Upload file content"
-	netPort, err := ft.StartUpload("up_session_1", "docs/file.txt", "repo_123", "peer_bob", "hash123", int64(len(mockData)))
+	netPort, _, err := ft.StartUpload("up_session_1", "docs/file.txt", "repo_123", "peer_bob", "hash123", int64(len(mockData)))
 	if err != nil {
 		t.Fatalf("StartUpload failed: %v", err)
 	}
@@ -374,7 +374,7 @@ func TestFileTransferUploadSizeMismatch(t *testing.T) {
 	ft := NewFileTransferManager(ipcServer)
 
 	// Expect 20 bytes, but C++ will write only 5 bytes
-	netPort, err := ft.StartUpload("up_session_mismatch", "docs/file.txt", "repo_123", "peer_bob", "hash123", 20)
+	netPort, _, err := ft.StartUpload("up_session_mismatch", "docs/file.txt", "repo_123", "peer_bob", "hash123", 20)
 	if err != nil {
 		t.Fatalf("StartUpload failed: %v", err)
 	}

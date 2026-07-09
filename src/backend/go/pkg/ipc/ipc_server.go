@@ -159,6 +159,9 @@ func (s *IpcServer) handleOutgoingMessages() {
 }
 
 func (s *IpcServer) SendMessage(msg *Message) {
+	defer func() {
+		_ = recover()
+	}()
 	select {
 	case <-s.stopChan:
 		// Server is shutting down, drop message

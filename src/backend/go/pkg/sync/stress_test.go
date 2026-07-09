@@ -11,7 +11,9 @@ import (
 
 	"p2p/pkg/ipc"
 	"p2p/pkg/network"
+	"p2p/pkg/protocol"
 	"p2p/pkg/storage/sqlite"
+	"p2p/pkg/transfer"
 )
 
 func TestStress1000SmallFiles(t *testing.T) {
@@ -88,13 +90,7 @@ func TestStress1000SmallFiles(t *testing.T) {
 	numFiles := 1000
 
 	for i := 0; i < numFiles; i++ {
-		changePayload := &struct {
-			Action       string `json:"action"`
-			Path         string `json:"path"`
-			Hash         string `json:"hash"`
-			Size         int64  `json:"size"`
-			ModifiedTime int64  `json:"modified_time"`
-		}{
+		changePayload := &protocol.FileChangedPayload{
 			Action:       "add",
 			Path:         fmt.Sprintf("file_%d.txt", i),
 			Hash:         fmt.Sprintf("hash_%08d", i),
@@ -187,7 +183,7 @@ func TestStressConcurrentTransfers(t *testing.T) {
 				_, _ = conn.Write(data)
 			}()
 
-			ft := NewFileTransferManager(ipcServer)
+			ft := transfer.NewFileTransferManager(ipcServer)
 			err = ft.StartDownload(
 				fmt.Sprintf("dl_%d", idx),
 				fmt.Sprintf("file_%d.dat", idx),
@@ -261,13 +257,7 @@ func TestStressRapidChanges(t *testing.T) {
 	changes := 100
 
 	for i := 0; i < changes; i++ {
-		changePayload := &struct {
-			Action       string `json:"action"`
-			Path         string `json:"path"`
-			Hash         string `json:"hash"`
-			Size         int64  `json:"size"`
-			ModifiedTime int64  `json:"modified_time"`
-		}{
+		changePayload := &protocol.FileChangedPayload{
 			Action:       "add",
 			Path:         fmt.Sprintf("rapid_%d.txt", i),
 			Hash:         fmt.Sprintf("hash_%d", i),
@@ -406,7 +396,7 @@ func TestStressLargeFileTransfer(t *testing.T) {
 		t.Fatalf("listen: %v", err)
 	}
 	defer listener.Close()
-	port := listener.Addr().(*net.TCPAddr).Port
+	_ = listener.Addr().(*net.TCPAddr).Port
 
 	go func() {
 		conn, err := listener.Accept()
@@ -427,10 +417,10 @@ func TestStressLargeFileTransfer(t *testing.T) {
 		}
 	}()
 
-	ft := NewFileTransferManager(ipcServer)
+	ft := transfer.NewFileTransferManager(ipcServer)
 
 	start := time.Now()
-	err = ft.StartUpload("large_up", "large.dat", "repo", "remote-peer", "large-hash", fileSize)
+	_, _, err = ft.StartUpload("large_up", "large.dat", "repo", "remote-peer", "large-hash", fileSize)
 	if err != nil {
 		t.Fatalf("StartUpload: %v", err)
 	}
