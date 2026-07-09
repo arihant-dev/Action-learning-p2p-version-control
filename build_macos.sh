@@ -58,7 +58,7 @@ echo "--> 4. Embedding Go & C++ components in App Bundle..."
 APP_DIR="target/app"
 mkdir -p "$APP_DIR/bin"
 cp build/go_coordinator "$APP_DIR/bin/"
-cp src/backend/cpp/build/bin/cpp_daemon "$APP_DIR/bin/"
+cp src/backend/cpp/build/bin/p2p_daemon "$APP_DIR/bin/"
 
 echo "--> 5. Generating Self-Contained macOS App Bundle..."
 rm -rf target/bundle
