@@ -4,9 +4,23 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., 1.2.3)'
+        required: true
+        type: string
+      dry_run:
+        description: 'Skip the final GitHub Release creation step'
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: write
+
+env:
+  VERSION: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.version) || github.ref_name }}
 
 jobs:
   build-macos:
@@ -32,7 +46,7 @@ jobs:
       - name: Build macOS App Bundle
         run: |
           chmod +x mvnw
-          VERSION="${GITHUB_REF_NAME#v}" ./build_macos.sh
+          VERSION="${{ env.VERSION }}" ./build_macos.sh
 
       - name: Determine Architecture Name
         id: arch
@@ -72,15 +86,117 @@ jobs:
       - name: Build Linux App Image
         run: |
           chmod +x mvnw
-          VERSION="${GITHUB_REF_NAME#v}" ./build_linux.sh
+          VERSION="${{ env.VERSION }}" ./build_linux.sh
 
       - uses: actions/upload-artifact@v4
         with:
           name: P2PVersionControl-linux
           path: target/P2PVersionControl-*.tar.gz
 
+  build-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Install WiX Toolset (for .msi)
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          wix --version
+
+      - name: Build Windows Binaries
+        run: |
+          mkdir -p build
+
+          # Build Go coordinator
+          cd src/backend/go
+          go build -o ..\..\..\build\go_coordinator.exe main.go
+          cd ..\..\..
+
+          # Build C++ daemon
+          cmake -S src/backend/cpp -B src/backend/cpp/build
+          cmake --build src/backend/cpp/build --config Release
+
+          # CMake outputs to build/Release/p2p_daemon.exe on Windows (MSVC multi-config)
+          $candidates = @(
+            "src/backend/cpp/build/Release/p2p_daemon.exe",
+            "src/backend/cpp/build/bin/Release/p2p_daemon.exe",
+            "src/backend/cpp/build/bin/p2p_daemon.exe"
+          )
+          $found = $false
+          foreach ($c in $candidates) {
+            if (Test-Path $c) {
+              Copy-Item $c build/p2p_daemon.exe
+              $found = $true
+              Write-Host "Copied from: $c"
+              break
+            }
+          }
+          if (-not $found) {
+            throw "Cannot find p2p_daemon.exe build output. Searched: $($candidates -join ', ')"
+          }
+
+      - name: Package Executables (.zip)
+        run: |
+          $ver = "${{ env.VERSION }}"
+          $zipPath = "target\P2PVersionControl-${ver}-windows-x64.zip"
+          New-Item -ItemType Directory -Force -Path target
+          Compress-Archive -Path build\go_coordinator.exe, build\p2p_daemon.exe -DestinationPath $zipPath
+
+      - name: Build Windows Installer (.msi)
+        run: |
+          $ver = "${{ env.VERSION }}"
+          $appName = "P2PVersionControl"
+          New-Item -ItemType Directory -Force -Path target\wix
+
+          @"
+          <?xml version="1.0" encoding="UTF-8"?>
+          <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+            <Package Name="$appName" Manufacturer="P2P Sync" Version="$ver" UpgradeCode="12345678-1234-1234-1234-123456789abc">
+              <Media Id="1" Cabinet="app.cab" EmbedCab="yes" />
+              <StandardDirectory Id="ProgramFiles6432Folder">
+                <Directory Id="APPLICATIONFOLDER" Name="$appName">
+                  <Component Id="GoCoordinatorExe" Bitness="always64" Guid="abcdef01-1234-5678-9abc-def012345678">
+                    <File Source="build\go_coordinator.exe" />
+                  </Component>
+                  <Component Id="DaemonExe" Bitness="always64" Guid="abcdef02-1234-5678-9abc-def012345679">
+                    <File Source="build\p2p_daemon.exe" />
+                  </Component>
+                </Directory>
+              </StandardDirectory>
+              <Feature Id="MainFeature" Level="1">
+                <ComponentRef Id="GoCoordinatorExe" />
+                <ComponentRef Id="DaemonExe" />
+              </Feature>
+            </Package>
+          </Wix>
+          "@ | Set-Content -Path "target\wix\installer.wxs"
+
+          wix build -out "target\${appName}-${ver}-windows-x64.msi" "target\wix\installer.wxs"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: P2PVersionControl-windows-x64
+          path: |
+            target/P2PVersionControl-*.zip
+            target/P2PVersionControl-*.msi
+
   create-release:
-    needs: [build-macos, build-linux]
+    needs: [build-macos, build-linux, build-windows]
+    if: github.event_name != 'workflow_dispatch' || !inputs.dry_run
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -91,13 +207,23 @@ jobs:
         with:
           merge-multiple: true
 
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: ./
+          format: cyclonedx-json
+          output-file: p2p-sync-sbom.cdx.json
+
       - name: Create GitHub Release
+        id: create_release
         run: |
-          VERSION="$GITHUB_REF_NAME"
+          VERSION="${{ env.VERSION }}"
           gh release create "$VERSION" \
             --title "$VERSION" \
             --generate-notes \
             *.zip \
-            *.tar.gz
+            *.tar.gz \
+            *.msi \
+            p2p-sync-sbom.cdx.json
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

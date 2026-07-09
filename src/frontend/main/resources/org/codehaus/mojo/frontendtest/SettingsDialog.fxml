@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<DialogPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+            prefWidth="420" prefHeight="320">
+    <content>
+        <TabPane>
+            <Tab text="General" closable="false">
+                <VBox spacing="10" styleClass="root">
+                    <padding><Insets top="10" right="10" bottom="10" left="10"/></padding>
+                    <CheckBox fx:id="autoStartCheck" text="Auto-start on login"/>
+                    <GridPane hgap="10" vgap="10">
+                        <Label text="Log Level:" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
+                        <ComboBox fx:id="logLevelCombo" GridPane.columnIndex="1" GridPane.rowIndex="0"/>
+                    </GridPane>
+                </VBox>
+            </Tab>
+            <Tab text="Network" closable="false">
+                <VBox spacing="10" styleClass="root">
+                    <padding><Insets top="10" right="10" bottom="10" left="10"/></padding>
+                    <GridPane hgap="10" vgap="10">
+                        <Label text="IPC Socket:" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
+                        <TextField fx:id="ipcSocketField" GridPane.columnIndex="1" GridPane.rowIndex="0"/>
+                        <Label text="P2P Port:" GridPane.columnIndex="0" GridPane.rowIndex="1"/>
+                        <TextField fx:id="p2pPortField" GridPane.columnIndex="1" GridPane.rowIndex="1"/>
+                    </GridPane>
+                </VBox>
+            </Tab>
+            <Tab text="Appearance" closable="false">
+                <VBox spacing="10" styleClass="root">
+                    <padding><Insets top="10" right="10" bottom="10" left="10"/></padding>
+                    <GridPane hgap="10" vgap="10">
+                        <Label text="Theme:" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
+                        <ComboBox fx:id="themeCombo" GridPane.columnIndex="1" GridPane.rowIndex="0"/>
+                    </GridPane>
+                </VBox>
+            </Tab>
+        </TabPane>
+    </content>
+    <ButtonType fx:constant="OK"/>
+    <ButtonType fx:constant="CANCEL"/>
+</DialogPane>

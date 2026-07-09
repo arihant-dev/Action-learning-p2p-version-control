@@ -1,25 +1,20 @@
-#pragma once
+#ifndef IPC_CLIENT_H
+#define IPC_CLIENT_H
 
 #include <string>
-#include <mutex>
+#include <memory>
 #include <nlohmann/json.hpp>
-
-namespace ipc {
 
 class IpcClient {
 public:
-    IpcClient();
-    ~IpcClient();
+    virtual ~IpcClient() = default;
+    virtual bool connect(const std::string& path) = 0;
+    virtual bool send(const std::string& message) = 0;
+    virtual bool receive(std::string& message) = 0;
+    virtual void disconnect() = 0;
+    virtual bool isConnected() = 0;
 
-    bool connect(const std::string &socket_path);
-    void disconnect();
-    bool send_message(const nlohmann::json &message);
-    bool read_message(nlohmann::json &message);
-    bool is_connected();
-
-private:
-    int socket_fd_;
-    std::mutex mtx_;
+    static std::unique_ptr<IpcClient> create();
 };
 
-} // namespace ipc
+#endif

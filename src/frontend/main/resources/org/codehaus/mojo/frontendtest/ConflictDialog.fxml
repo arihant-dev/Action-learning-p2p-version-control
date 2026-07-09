@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<DialogPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="org.codehaus.mojo.frontendtest.ConflictDialog"
+            prefWidth="480" prefHeight="300">
+    <content>
+        <VBox spacing="10" styleClass="root">
+            <padding>
+                <Insets top="20" right="20" bottom="20" left="20"/>
+            </padding>
+            <Label fx:id="conflictInfoLabel" wrapText="true" styleClass="section-label"/>
+            <RadioButton fx:id="keepLocalRadio" text="Keep Local - Your version wins" selected="true"/>
+            <RadioButton fx:id="acceptRemoteRadio" text="Accept Remote - Their version wins"/>
+            <RadioButton fx:id="manualMergeRadio" text="Mark for Manual Merge"/>
+        </VBox>
+    </content>
+    <ButtonType fx:constant="OK"/>
+    <ButtonType fx:constant="CANCEL"/>
+</DialogPane>

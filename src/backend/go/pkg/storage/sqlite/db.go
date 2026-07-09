@@ -6,6 +6,7 @@ package sqlite
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	_ "github.com/mattn/go-sqlite3" // SQLite driver
 )
@@ -79,6 +80,10 @@ func Open(path string) (*DB, error) {
 		conn.Close()
 		return nil, fmt.Errorf("apply schema: %w", err)
 	}
+	if err := migrateSchema(conn); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("migrate schema: %w", err)
+	}
 
 	return db, nil
 }
@@ -91,6 +96,16 @@ func (db *DB) Close() error {
 // Conn returns the raw *sql.DB connection for advanced use-cases.
 func (db *DB) Conn() *sql.DB {
 	return db.conn
+}
+
+// migrateSchema applies incremental schema migrations for databases
+// that were created before newer columns were added.
+func migrateSchema(db *sql.DB) error {
+	_, err := db.Exec(`ALTER TABLE file_metadata ADD COLUMN vector_clock TEXT DEFAULT '{}'`)
+	if err != nil && !strings.Contains(err.Error(), "duplicate column") {
+		return err
+	}
+	return nil
 }
 
 // applySchema runs all DDL statements inside a single transaction.

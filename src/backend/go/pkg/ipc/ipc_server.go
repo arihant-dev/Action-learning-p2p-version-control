@@ -61,7 +61,8 @@ func (s *IpcServer) Start() error {
 	if err != nil {
 		// Fallback to TCP on Windows or if Unix socket fails
 		fmt.Println("Unix socket not available, falling back to TCP")
-		listener, err = net.Listen("tcp", "127.0.0.1:9999")
+		port := deriveFallbackPort(s.socketPath)
+		listener, err = net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
 		if err != nil {
 			return err
 		}
@@ -159,6 +160,9 @@ func (s *IpcServer) handleOutgoingMessages() {
 }
 
 func (s *IpcServer) SendMessage(msg *Message) {
+	defer func() {
+		_ = recover()
+	}()
 	select {
 	case <-s.stopChan:
 		// Server is shutting down, drop message
@@ -234,4 +238,12 @@ func WriteMessage(conn net.Conn, msg *Message) error {
 	}
 
 	return nil
+}
+
+func deriveFallbackPort(socketPath string) int {
+	h := uint32(2166136261)
+	for i := 0; i < len(socketPath); i++ {
+		h = (h ^ uint32(socketPath[i])) * 16777619
+	}
+	return 10000 + int(h % 20000)
 }

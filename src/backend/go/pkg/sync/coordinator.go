@@ -1,10 +1,17 @@
 package sync
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,10 +21,6 @@ import (
 	"p2p/pkg/storage/sqlite"
 	"p2p/pkg/transfer"
 	"p2p/pkg/versioning"
-	"os"
-	"os/exec"
-	"syscall"
-	"path/filepath"
 )
 
 // SyncCoordinator coordinates multi-repository synchronization across the local
@@ -38,7 +41,8 @@ type SyncCoordinator struct {
 	localPeerID      string
 	mu               sync.RWMutex
 	workers          map[string]chan struct{} // repoID -> stop channel
-	concurrencySem   chan struct{}            // semaphore for concurrent P2P transfers
+	repoSemaphores   map[string]chan struct{} // per-repository concurrency control
+	globalSem        chan struct{}            // global parent semaphore
 	stopChan         chan struct{}
 	wg               sync.WaitGroup
 	pendingDownloads map[string]pendingDownload // path:hash -> pendingDetails
@@ -53,6 +57,12 @@ func NewSyncCoordinator(
 	connMgr *network.ConnectionManager,
 	localPeerID string,
 ) *SyncCoordinator {
+	globalConcurrency := 16
+	if s := os.Getenv("P2P_GLOBAL_CONCURRENCY"); s != "" {
+		if v, err := strconv.Atoi(s); err == nil && v > 0 {
+			globalConcurrency = v
+		}
+	}
 	return &SyncCoordinator{
 		db:               db,
 		ipcServer:        ipcServer,
@@ -62,7 +72,8 @@ func NewSyncCoordinator(
 		transferMgr:      transfer.NewFileTransferManager(ipcServer),
 		localPeerID:      localPeerID,
 		workers:          make(map[string]chan struct{}),
-		concurrencySem:   make(chan struct{}, 4), // Max 4 concurrent uploads/downloads
+		repoSemaphores:   make(map[string]chan struct{}),
+		globalSem:        make(chan struct{}, globalConcurrency),
 		stopChan:         make(chan struct{}),
 		pendingDownloads: make(map[string]pendingDownload),
 		lamportClock:     versioning.NewLamportClock(),
@@ -74,6 +85,12 @@ func NewSyncCoordinator(
 func (sc *SyncCoordinator) Start() error {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
+
+	// Load persisted vector clocks from database
+	if err := sc.loadVectorClocks(); err != nil {
+		log.Printf("[SyncCoordinator] Warning: failed to load vector clocks: %v\n", err)
+	}
+
 	// Load existing active repositories and start workers
 	repos, err := sc.db.Repositories().List()
 	if err != nil {
@@ -111,6 +128,16 @@ func (sc *SyncCoordinator) startRepoWorkerLocked(repoID string) {
 	stopCh := make(chan struct{})
 	sc.workers[repoID] = stopCh
 
+	repoConcurrency := 2
+	if s := os.Getenv("P2P_REPO_CONCURRENCY"); s != "" {
+		if v, err := strconv.Atoi(s); err == nil && v > 0 {
+			repoConcurrency = v
+		}
+	}
+	if _, exists := sc.repoSemaphores[repoID]; !exists {
+		sc.repoSemaphores[repoID] = make(chan struct{}, repoConcurrency)
+	}
+
 	sc.wg.Add(1)
 	go func() {
 		defer sc.wg.Done()
@@ -126,9 +153,9 @@ func (sc *SyncCoordinator) startRepoWorkerLocked(repoID string) {
 		}
 
 		// 2. Find C++ daemon binary
-		cppExe := "./cpp_daemon"
+		cppExe := "./p2p_daemon"
 		if execPath, errExec := os.Executable(); errExec == nil {
-			peerCpp := filepath.Join(filepath.Dir(execPath), "cpp_daemon")
+			peerCpp := filepath.Join(filepath.Dir(execPath), "p2p_daemon")
 			if _, errStat := os.Stat(peerCpp); errStat == nil {
 				cppExe = peerCpp
 			}
@@ -136,9 +163,9 @@ func (sc *SyncCoordinator) startRepoWorkerLocked(repoID string) {
 
 		if _, err := os.Stat(cppExe); os.IsNotExist(err) {
 			candidates := []string{
-				"src/backend/cpp/build/bin/cpp_daemon",
-				"../cpp/build/bin/cpp_daemon",
-				"build/bin/cpp_daemon",
+				"src/backend/cpp/build/bin/p2p_daemon",
+				"../cpp/build/bin/p2p_daemon",
+				"build/bin/p2p_daemon",
 			}
 			for _, c := range candidates {
 				if _, errStat := os.Stat(c); errStat == nil {
@@ -154,8 +181,8 @@ func (sc *SyncCoordinator) startRepoWorkerLocked(repoID string) {
 				log.Println("[SyncCoordinator] C++ daemon binary missing. Attempting build...")
 				_ = exec.Command("cmake", "-B", "src/backend/cpp/build", "-S", "src/backend/cpp").Run()
 				_ = exec.Command("cmake", "--build", "src/backend/cpp/build").Run()
-				if _, errStat := os.Stat("src/backend/cpp/build/bin/cpp_daemon"); errStat == nil {
-					cppExe = "src/backend/cpp/build/bin/cpp_daemon"
+				if _, errStat := os.Stat("src/backend/cpp/build/bin/p2p_daemon"); errStat == nil {
+					cppExe = "src/backend/cpp/build/bin/p2p_daemon"
 				}
 			}
 		}
@@ -167,8 +194,8 @@ func (sc *SyncCoordinator) startRepoWorkerLocked(repoID string) {
 			cmd = exec.Command(cppExe, repoID, repo.LocalPath, sc.ipcServer.SocketPath())
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
-			// Use process group so we can kill the entire group on shutdown
-			cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+			// Use process group so we can kill the entire group on shutdown (Unix only)
+			setProcessGroup(cmd)
 			if err := cmd.Start(); err != nil {
 				log.Printf("[SyncCoordinator] Error: Failed to start C++ daemon: %v\n", err)
 			}
@@ -181,13 +208,8 @@ func (sc *SyncCoordinator) startRepoWorkerLocked(repoID string) {
 		// 5. Clean up C++ daemon process (kill entire process group)
 		if cmd != nil && cmd.Process != nil {
 			log.Printf("[SyncCoordinator] Terminating C++ daemon for repo %s...\n", repoID)
-			// Try SIGTERM to the process group first
-			pgid, err := syscall.Getpgid(cmd.Process.Pid)
-			if err == nil && pgid > 0 {
-				syscall.Kill(-pgid, syscall.SIGTERM)
-			} else {
-				_ = cmd.Process.Signal(syscall.SIGTERM)
-			}
+			// Try graceful termination first
+			_ = killProcessGroup(cmd, true)
 			// Wait with timeout
 			done := make(chan struct{})
 			go func() {
@@ -198,11 +220,7 @@ func (sc *SyncCoordinator) startRepoWorkerLocked(repoID string) {
 			case <-done:
 			case <-time.After(3 * time.Second):
 				log.Printf("[SyncCoordinator] Force killing C++ daemon for repo %s...\n", repoID)
-				if err == nil && pgid > 0 {
-					syscall.Kill(-pgid, syscall.SIGKILL)
-				} else {
-					_ = cmd.Process.Kill()
-				}
+				_ = killProcessGroup(cmd, false)
 				_ = cmd.Wait()
 			}
 		}
@@ -216,9 +234,20 @@ func (sc *SyncCoordinator) AddRepository(repoID, localPath string) error {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
+	cleanedPath := localPath
+	if cp, err := filepath.EvalSymlinks(localPath); err == nil {
+		if abs, err := filepath.Abs(cp); err == nil {
+			cleanedPath = abs
+		}
+	} else {
+		if abs, err := filepath.Abs(localPath); err == nil {
+			cleanedPath = abs
+		}
+	}
+
 	repo := sqlite.Repository{
 		ID:        repoID,
-		LocalPath: localPath,
+		LocalPath: cleanedPath,
 		Status:    "active",
 		SyncMode:  "auto",
 		CreatedAt: time.Now().Unix(),
@@ -259,6 +288,23 @@ func (sc *SyncCoordinator) HandleLocalFileChanged(repoID string, payload *protoc
 
 	if !active {
 		return fmt.Errorf("repository %s is not active", repoID)
+	}
+
+	// 0. Normalize absolute path to relative path
+	if filepath.IsAbs(payload.Path) {
+		repo, err := sc.db.Repositories().Get(repoID)
+		if err == nil && repo != nil {
+			if rel, err := filepath.Rel(repo.LocalPath, payload.Path); err == nil {
+				payload.Path = rel
+			}
+		}
+	}
+
+	// Skip temporary files (.tmp) created during download — they are
+	// internal to the transfer and should never enter the metadata DB.
+	if strings.HasSuffix(payload.Path, ".tmp") {
+		log.Printf("[SyncCoordinator] Ignoring temp file change: %s\n", payload.Path)
+		return nil
 	}
 
 	// 1. Fetch current database metadata
@@ -335,6 +381,11 @@ func (sc *SyncCoordinator) HandleLocalFileChanged(repoID string, payload *protoc
 // HandlePeerMetadataUpdate processes version changes received from a remote peer.
 func (sc *SyncCoordinator) HandlePeerMetadataUpdate(peerID string, repoID string, update map[string]interface{}) {
 	path, _ := update["path"].(string)
+
+	// Ignore metadata for temporary files — they are transfer internals.
+	if strings.HasSuffix(path, ".tmp") {
+		return
+	}
 	hash, _ := update["hash"].(string)
 	sizeVal, _ := update["size"].(float64)
 	verVal, _ := update["version"].(float64)
@@ -565,17 +616,34 @@ func (sc *SyncCoordinator) queueProcessorLoop() {
 				continue
 			}
 
-			// Acquire concurrency slot (bandwidth scheduling)
+			sc.mu.RLock()
+			repoSem, hasRepoSem := sc.repoSemaphores[task.RepoID]
+			sc.mu.RUnlock()
+			if !hasRepoSem {
+				log.Printf("[SyncCoordinator] No semaphore for repo %s, skipping task\n", task.RepoID)
+				continue
+			}
+
 			select {
-			case sc.concurrencySem <- struct{}{}:
-				// Slot acquired, process sync task
-				go func(t *SyncTask) {
-					defer func() { <-sc.concurrencySem }()
-					sc.executeSyncTask(t)
-				}(task)
 			case <-sc.stopChan:
 				return
+			case sc.globalSem <- struct{}{}:
 			}
+
+			select {
+			case <-sc.stopChan:
+				<-sc.globalSem
+				return
+			case repoSem <- struct{}{}:
+			}
+
+			go func(t *SyncTask) {
+				defer func() {
+					<-repoSem
+					<-sc.globalSem
+				}()
+				sc.executeSyncTask(t)
+			}(task)
 		}
 	}
 }
@@ -672,7 +740,7 @@ func (sc *SyncCoordinator) HandleP2PMessage(peerID string, msg *ipc.Message) err
 
 		// File is found locally. Start upload session.
 		transferID := fmt.Sprintf("up_%d_%s", time.Now().UnixNano(), meta.RepositoryID)
-		transferPort, err := sc.transferMgr.StartUpload(transferID, meta.Filepath, meta.RepositoryID, peerID, meta.Hash, meta.Size)
+		transferPort, inlineData, err := sc.transferMgr.StartUpload(transferID, meta.Filepath, meta.RepositoryID, peerID, meta.Hash, meta.Size)
 		if err != nil {
 			log.Printf("[SyncCoordinator] StartUpload failed for %s: %v\n", payload.Path, err)
 			resp := &ipc.Message{
@@ -698,11 +766,16 @@ func (sc *SyncCoordinator) HandleP2PMessage(peerID string, msg *ipc.Message) err
 			Source:    "go",
 			Timestamp: time.Now().UnixNano() / int64(time.Millisecond),
 		}
-		respPayload, _ := json.Marshal(protocol.FileResponsePayload{
-			Path:         payload.Path,
-			Hash:         payload.Hash,
-			TransferPort: transferPort,
-		})
+		fileResp := protocol.FileResponsePayload{
+			Path: payload.Path,
+			Hash: payload.Hash,
+		}
+		if inlineData != "" {
+			fileResp.ContentBase64 = inlineData
+		} else {
+			fileResp.TransferPort = transferPort
+		}
+		respPayload, _ := json.Marshal(fileResp)
 		resp.Payload = respPayload
 		_ = sc.connMgr.SendToPeer(peerID, resp)
 		return nil
@@ -743,6 +816,43 @@ func (sc *SyncCoordinator) HandleP2PMessage(peerID string, msg *ipc.Message) err
 
 		if !exists {
 			log.Printf("[SyncCoordinator] Pending download details not found for response: %s\n", payload.Path)
+			return nil
+		}
+
+		if payload.ContentBase64 != "" {
+			data, err := base64.StdEncoding.DecodeString(payload.ContentBase64)
+			if err != nil {
+				log.Printf("[SyncCoordinator] Failed to decode base64 content: %v\n", err)
+				return nil
+			}
+			repo, err := sc.db.Repositories().Get(pDetails.repoID)
+			if err != nil || repo == nil {
+				log.Printf("[SyncCoordinator] Repository not found for inline write: %s\n", pDetails.repoID)
+				return nil
+			}
+			absPath := filepath.Join(repo.LocalPath, payload.Path)
+			err = os.WriteFile(absPath, data, os.FileMode(pDetails.mode))
+			if err != nil {
+				log.Printf("[SyncCoordinator] Failed to write inline file: %v\n", err)
+				return nil
+			}
+			
+			// Update file_metadata in SQLite DB
+			hash := fmt.Sprintf("%x", sha256.Sum256(data))
+			mtime := time.Now().Unix()
+			meta := &sqlite.FileMetadata{
+				RepositoryID:      pDetails.repoID,
+				Filepath:          payload.Path,
+				Hash:              hash,
+				Size:              int64(len(data)),
+				Version:           int64(sc.lamportClock.Tick()),
+				LocalLastModified: mtime,
+				IsDeleted:         false,
+				UpdatedAt:         time.Now().UnixNano() / int64(time.Millisecond),
+				Mode:              pDetails.mode,
+			}
+			_ = sc.db.Metadata().Save(meta)
+			log.Printf("[SyncCoordinator] Inline small-file written successfully: %s\n", payload.Path)
 			return nil
 		}
 

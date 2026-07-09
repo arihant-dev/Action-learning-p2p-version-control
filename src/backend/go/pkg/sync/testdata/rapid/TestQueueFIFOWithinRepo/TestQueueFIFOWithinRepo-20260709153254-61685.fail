@@ -1,0 +1,35 @@
+# 2026/07/09 15:32:54.559681 [TestQueueFIFOWithinRepo] [rapid] draw count: 7
+# 2026/07/09 15:32:54.559684 [TestQueueFIFOWithinRepo] [rapid] draw size: 1
+# 2026/07/09 15:32:54.559685 [TestQueueFIFOWithinRepo] [rapid] draw size: 100
+# 2026/07/09 15:32:54.559686 [TestQueueFIFOWithinRepo] [rapid] draw size: 26
+# 2026/07/09 15:32:54.559687 [TestQueueFIFOWithinRepo] [rapid] draw size: 42
+# 2026/07/09 15:32:54.559688 [TestQueueFIFOWithinRepo] [rapid] draw size: 22
+# 2026/07/09 15:32:54.559689 [TestQueueFIFOWithinRepo] [rapid] draw size: 2
+# 2026/07/09 15:32:54.559690 [TestQueueFIFOWithinRepo] [rapid] draw size: 45
+# 2026/07/09 15:32:54.559691 [TestQueueFIFOWithinRepo] FIFO violation: task file_e.txt (ts=2026-07-09 15:32:58.559683 +0200 CEST m=+5.574325876) popped before file_f.txt (ts=2026-07-09 15:32:59.559683 +0200 CEST m=+6.574325876)
+# 
+v0.4.8#16464335719967698715
+0x187ded6f32d027
+0x1386d6c936c6dd
+0x5
+0x5097eb66e22e0
+0x136607f0295c5
+0x0
+0x5b6102e2945db
+0x1f38cdfff7d3ff
+0xffffffffffffffff
+0x192cc6bed32279
+0xdfc9615d81852
+0x19
+0x73ebf25dcb722
+0x11aa7fa1af537c
+0x29
+0x6a145f15400f2
+0x1709f4815b2e7b
+0x15
+0x14a9a61ad29dcd
+0xb7265ef194f23
+0x1
+0x872106239adb0
+0x1026c0ec13651e
+0x2c

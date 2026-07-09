@@ -1,35 +1,41 @@
-#pragma once
+#ifndef FILESYSTEM_WATCHER_H
+#define FILESYSTEM_WATCHER_H
 
-#include <functional>
 #include <string>
-#include <thread>
+#include <functional>
+#include <memory>
+#include <chrono>
+#include <vector>
 #include <atomic>
-#include <map>
-#include <filesystem>
+
+enum class WatchEventType { Created, Modified, Deleted, Moved };
+
+struct WatchEvent {
+    WatchEventType type;
+    std::string path;
+    std::string newPath;
+};
 
 class FileSystemWatcher {
 public:
-    using FileChangeCallback =
-        std::function<void(const std::string &path, const std::string &action)>;
+    using Callback = std::function<void(const WatchEvent&)>;
 
-    FileSystemWatcher(const std::string &watch_path, std::atomic<bool> &shutdown);
-    ~FileSystemWatcher();
+    FileSystemWatcher(const std::string& watchPath, Callback callback);
+    virtual ~FileSystemWatcher() = default;
 
-    bool start(FileChangeCallback callback);
-    void stop();
+    virtual bool start() = 0;
+    virtual void stop();
+    bool isRunning() const { return running_; }
 
-private:
-    const std::string watch_path_;
-    std::atomic<bool> &shutdown_;
-    std::thread watch_thread_;
-    FileChangeCallback callback_;
-
-    struct FileInfo {
-        std::filesystem::file_time_type last_write_time;
-        uintmax_t size;
-    };
-    std::map<std::string, FileInfo> known_files_;
-
-    void watch_loop();
-    void scan_directory(bool notify);
+protected:
+    std::string watchPath_;
+    Callback callback_;
+    std::atomic<bool> running_{false};
 };
+
+std::unique_ptr<FileSystemWatcher> createWatcher(
+    const std::string& watchPath,
+    FileSystemWatcher::Callback callback,
+    std::chrono::milliseconds pollInterval = std::chrono::milliseconds(1000));
+
+#endif

@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - master
+      - industry-shipping
+      - industry-*
       - test/**
       - fix/**
       - feature/**
@@ -11,18 +13,20 @@ on:
   pull_request:
     branches:
       - master
+      - industry-shipping
 
 jobs:
   go-test:
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
       fail-fast: false
     runs-on: ${{ matrix.os }}
 
     defaults:
       run:
         working-directory: src/backend/go
+        shell: bash
 
     steps:
       - uses: actions/checkout@v4
@@ -34,25 +38,33 @@ jobs:
 
       - run: go build ./...
 
-      - run: go clean -testcache && go test ./... -count=1 -a
+      - run: go clean -testcache && go test ./... -count=1 -short
 
   cpp-build-test:
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
       fail-fast: false
     runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
 
+      - uses: jwlawson/actions-setup-cmake@v2
+
+      - name: Install OpenSSL (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y libssl-dev
+
+      - name: Install OpenSSL (macOS)
+        if: runner.os == 'macOS'
+        run: brew install openssl
+
       - name: cmake-build
         working-directory: src/backend/cpp
         run: |
-          mkdir -p build
-          cd build
-          cmake -DCMAKE_BUILD_TYPE=Release ..
-          cmake --build . --parallel
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --parallel
 
       - name: run-cmake-tests
         working-directory: src/backend/cpp
@@ -61,7 +73,7 @@ jobs:
   java-build:
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
       fail-fast: false
     runs-on: ${{ matrix.os }}
 

@@ -49,7 +49,7 @@ fi
 echo "--> 4. Embedding Go & C++ components in App Bundle..."
 mkdir -p target/app/bin
 cp build/go_coordinator target/app/bin/
-cp src/backend/cpp/build/bin/cpp_daemon target/app/bin/
+cp src/backend/cpp/build/bin/p2p_daemon target/app/bin/
 
 echo "--> 5. Generating Self-Contained App Image..."
 rm -rf target/bundle

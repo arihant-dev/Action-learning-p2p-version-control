@@ -1,0 +1,405 @@
+asyncapi: '2.6.0'
+info:
+  title: P2P Sync IPC Protocol
+  version: '1.0.0'
+  description: >
+    IPC protocol between Java Frontend ↔ Go Coordinator ↔ C++ Daemon.
+    Messages are framed with a 4-byte big-endian length prefix followed by UTF-8 JSON.
+    Max message size: 1 MB.
+    Transport: Unix domain socket (/tmp/p2p_sync.sock) on Linux/macOS,
+    TCP loopback (127.0.0.1:9999) on Windows (fallback).
+
+servers:
+  unix-socket:
+    protocol: unix-socket
+    path: /tmp/p2p_sync.sock
+    description: Primary IPC transport on Linux/macOS
+  tcp-fallback:
+    protocol: tcp
+    host: 127.0.0.1
+    path: '9999'
+    description: Fallback IPC transport on Windows
+
+defaultContentType: application/json
+
+channels:
+  ipc-messages:
+    description: Bidirectional message channel between all three components
+    publish:
+      summary: Any component publishes a message to the IPC bus
+      message:
+        $ref: '#/components/messages/IPCMessage'
+
+components:
+  messages:
+    IPCMessage:
+      description: Framed JSON message envelope
+      headers:
+        type: object
+        properties:
+          version:
+            type: string
+            description: Protocol version
+            example: '1.0'
+      payload:
+        $ref: '#/components/schemas/MessageEnvelope'
+
+  schemas:
+    MessageEnvelope:
+      type: object
+      required:
+        - version
+        - type
+        - id
+        - timestamp
+        - source
+        - payload
+      properties:
+        version:
+          type: string
+          description: Protocol version
+          example: '1.0'
+        type:
+          type: string
+          description: Message type identifier
+          enum:
+            - handshake
+            - ping
+            - pong
+            - file_changed
+            - add_repository
+            - remove_repository
+            - repo_list_request
+            - repo_list_response
+            - repo_status_request
+            - repo_status_response
+            - peer_list_request
+            - peer_list_update
+            - conflict_detected
+            - file_transfer_complete
+            - sync_from_peer
+            - prepare_file_transfer
+            - health_check
+            - health_ack
+            - confirm_delete_request
+            - confirm_delete_response
+            - resolution_applied
+        id:
+          type: string
+          description: Unique message identifier (e.g. msg_<timestamp>)
+          example: msg_1712345678
+        timestamp:
+          type: integer
+          description: Unix epoch milliseconds
+          example: 1704067200000
+        source:
+          type: string
+          description: Originating component
+          enum:
+            - go
+            - cpp
+            - java
+        payload:
+          type: object
+          description: Type-specific payload (see message type details below)
+
+    FileChangedPayload:
+      type: object
+      required:
+        - repo_id
+        - filepath
+        - hash
+        - change_type
+      properties:
+        repo_id:
+          type: string
+          description: Repository identifier
+          example: "repo_abc123"
+        filepath:
+          type: string
+          description: Relative path within repository
+          example: "docs/design.md"
+        hash:
+          type: string
+          description: SHA-256 hex digest
+          example: "a1b2c3d4e5f6..."
+        change_type:
+          type: string
+          enum: [add, modify, delete]
+          description: Type of filesystem change detected
+        size:
+          type: integer
+          description: File size in bytes
+          example: 2048
+        modified_time:
+          type: integer
+          description: File modification Unix timestamp
+          example: 1704067100
+
+    AddRepositoryPayload:
+      type: object
+      required:
+        - repo_id
+        - local_path
+      properties:
+        repo_id:
+          type: string
+          description: Unique repository identifier
+        local_path:
+          type: string
+          description: Absolute path to the directory to track
+          example: "/home/user/myproject"
+
+    RemoveRepositoryPayload:
+      type: object
+      required:
+        - repo_id
+      properties:
+        repo_id:
+          type: string
+        confirm:
+          type: boolean
+          description: Safety confirmation flag
+          default: false
+
+    RepoListResponsePayload:
+      type: object
+      properties:
+        repositories:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              local_path:
+                type: string
+              status:
+                type: string
+                enum: [active, inactive]
+              sync_mode:
+                type: string
+                enum: [auto, manual]
+              updated_at:
+                type: integer
+
+    RepoStatusResponsePayload:
+      type: object
+      properties:
+        repo_id:
+          type: string
+        files:
+          type: array
+          items:
+            type: object
+            properties:
+              filepath:
+                type: string
+              status:
+                type: string
+                enum: [synced, pending, conflict, deleted]
+              hash:
+                type: string
+              version:
+                type: integer
+              peer_id:
+                type: string
+
+    SyncFromPeerPayload:
+      type: object
+      properties:
+        peer_id:
+          type: string
+        filepath:
+          type: string
+        data:
+          type: string
+          description: Base64-encoded file content (for small files) or transfer reference
+        hash:
+          type: string
+        size:
+          type: integer
+        mode:
+          type: integer
+          description: Unix file permissions mode
+
+    PrepareFileTransferPayload:
+      type: object
+      properties:
+        transfer_id:
+          type: string
+        path:
+          type: string
+        peer_id:
+          type: string
+        transfer_port:
+          type: integer
+          description: TCP port for data plane connection
+        expected_hash:
+          type: string
+        expected_size:
+          type: integer
+
+    PeerListUpdatePayload:
+      type: object
+      properties:
+        peers:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+              address:
+                type: string
+              port:
+                type: integer
+              connected:
+                type: boolean
+
+    ConflictDetectedPayload:
+      type: object
+      properties:
+        repo_id:
+          type: string
+        filepath:
+          type: string
+        local_hash:
+          type: string
+        remote_hash:
+          type: string
+        local_version:
+          type: integer
+        remote_version:
+          type: integer
+        resolution:
+          type: string
+          enum: [keep_local, accept_remote, manual]
+
+    ResolutionAppliedPayload:
+      type: object
+      properties:
+        repo_id:
+          type: string
+        filepath:
+          type: string
+        resolution:
+          type: string
+          enum: [keep_local, accept_remote, merge]
+
+    FileTransferCompletePayload:
+      type: object
+      properties:
+        transfer_id:
+          type: string
+        path:
+          type: string
+        success:
+          type: boolean
+        hash:
+          type: string
+
+  messageTypeExamples:
+    FileChanged:
+      value:
+        version: "1.0"
+        type: file_changed
+        id: "msg_12345"
+        timestamp: 1704067200000
+        source: cpp
+        payload:
+          repo_id: "repo_abc123"
+          filepath: "docs/design.md"
+          hash: "a1b2c3d4e5f67890abcdef1234567890abcdef12"
+          change_type: modify
+          size: 2048
+          modified_time: 1704067100
+
+    SyncFromPeer:
+      value:
+        version: "1.0"
+        type: sync_from_peer
+        id: "msg_67890"
+        timestamp: 1704067200500
+        source: go
+        payload:
+          peer_id: "alice-laptop"
+          filepath: "docs/design.md"
+          hash: "a1b2c3d4e5f67890abcdef1234567890abcdef12"
+          size: 2048
+
+    PrepareFileTransfer:
+      value:
+        version: "1.0"
+        type: prepare_file_transfer
+        id: "msg_transfer_1"
+        timestamp: 1704067201000
+        source: go
+        payload:
+          transfer_id: "transfer_alice-laptop_12345"
+          path: "docs/design.md"
+          peer_id: "alice-laptop"
+          transfer_port: 43210
+          expected_hash: "a1b2c3d4e5f67890abcdef1234567890abcdef12"
+          expected_size: 1048576
+
+    PeerListUpdate:
+      value:
+        version: "1.0"
+        type: peer_list_update
+        id: "msg_11111"
+        timestamp: 1704067201000
+        source: go
+        payload:
+          peers:
+            - id: "alice-laptop"
+              name: "Alice"
+              address: "192.168.1.100"
+              port: 9876
+              connected: true
+            - id: "bob-desktop"
+              name: "Bob"
+              address: "192.168.1.101"
+              port: 9876
+              connected: false
+
+    ConflictDetected:
+      value:
+        version: "1.0"
+        type: conflict_detected
+        id: "msg_conflict_1"
+        timestamp: 1704067202000
+        source: go
+        payload:
+          repo_id: "repo_abc123"
+          filepath: "docs/design.md"
+          local_hash: "aaaaaaaa..."
+          remote_hash: "bbbbbbbb..."
+          local_version: 3
+          remote_version: 2
+
+    RepoListResponse:
+      value:
+        version: "1.0"
+        type: repo_list_response
+        id: "msg_repo_list"
+        timestamp: 1704067203000
+        source: go
+        payload:
+          repositories:
+            - id: "repo_abc123"
+              local_path: "/home/user/myproject"
+              status: active
+              sync_mode: auto
+              updated_at: 1704067200
+
+    HealthCheck:
+      value:
+        version: "1.0"
+        type: health_check
+        id: "msg_health"
+        timestamp: 1704067204000
+        source: java
+        payload: {}

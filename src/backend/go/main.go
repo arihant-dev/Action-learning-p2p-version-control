@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"strconv"
@@ -21,7 +22,7 @@ import (
 	"p2p/pkg/sync"
 )
 
-const pidFilePath = "/tmp/p2p_sync.pid"
+var pidFilePath = "/tmp/p2p_sync.pid"
 
 func writePIDFile() error {
 	pid := os.Getpid()
@@ -74,6 +75,12 @@ func probePort(port int) (bool, error) {
 }
 
 func main() {
+	if envPid := os.Getenv("P2P_PID_PATH"); envPid != "" {
+		pidFilePath = envPid
+	} else if envIpc := os.Getenv("IPC_SOCKET"); envIpc != "" {
+		pidFilePath = strings.TrimSuffix(envIpc, ".sock") + ".pid"
+	}
+
 	// Before anything else: check for stale PID and release its resources
 	checkAndKillStaleProcess()
 
@@ -282,6 +289,22 @@ func main() {
 	}
 	startTime := time.Now()
 	healthSrv := startHealthEndpoint(healthPort, localPeerID, p2pPort, connMgr, startTime)
+
+	// pprof profiling (conditionally enabled via P2P_PPROF_ENABLED)
+	if os.Getenv("P2P_PPROF_ENABLED") == "true" {
+		go func() {
+			pprofPort := 6060
+			if envPPort := os.Getenv("P2P_PPROF_PORT"); envPPort != "" {
+				if val, err := strconv.Atoi(envPPort); err == nil {
+					pprofPort = val
+				}
+			}
+			log.Printf("[Main] pprof enabled on :%d\n", pprofPort)
+			if err := http.ListenAndServe(fmt.Sprintf(":%d", pprofPort), nil); err != nil {
+				log.Printf("[Main] pprof server error: %v\n", err)
+			}
+		}()
+	}
 
 	// Graceful shutdown
 	sigChan := make(chan os.Signal, 1)

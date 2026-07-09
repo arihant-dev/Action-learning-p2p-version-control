@@ -81,7 +81,7 @@ func TestFileTransferStreaming(t *testing.T) {
 		// Connect client
 		client, err = net.Dial("unix", sockPath)
 		if err != nil {
-			client, err = net.Dial("tcp", "127.0.0.1:9999")
+			client, err = net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", deriveFallbackPort(sockPath)))
 		}
 		if err == nil {
 			defer client.Close()
@@ -282,7 +282,7 @@ func TestFileTransferUploadStreaming(t *testing.T) {
 	// Connect mock C++ client so message channel functions
 	cConn, err := net.Dial("unix", sockPath)
 	if err != nil {
-		cConn, err = net.Dial("tcp", "127.0.0.1:9999")
+		cConn, err = net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", deriveFallbackPort(sockPath)))
 	}
 	if err == nil {
 		defer cConn.Close()
@@ -296,7 +296,7 @@ func TestFileTransferUploadStreaming(t *testing.T) {
 	ft := NewFileTransferManager(ipcServer)
 
 	mockData := "Upload file content"
-	netPort, err := ft.StartUpload("up_session_1", "docs/file.txt", "repo_123", "peer_bob", "hash123", int64(len(mockData)))
+	netPort, _, err := ft.StartUpload("up_session_1", "docs/file.txt", "repo_123", "peer_bob", "hash123", int64(len(mockData)))
 	if err != nil {
 		t.Fatalf("StartUpload failed: %v", err)
 	}
@@ -360,7 +360,7 @@ func TestFileTransferUploadSizeMismatch(t *testing.T) {
 	// Connect mock C++ client
 	cConn, err := net.Dial("unix", sockPath)
 	if err != nil {
-		cConn, err = net.Dial("tcp", "127.0.0.1:9999")
+		cConn, err = net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", deriveFallbackPort(sockPath)))
 	}
 	if err == nil {
 		defer cConn.Close()
@@ -374,7 +374,7 @@ func TestFileTransferUploadSizeMismatch(t *testing.T) {
 	ft := NewFileTransferManager(ipcServer)
 
 	// Expect 20 bytes, but C++ will write only 5 bytes
-	netPort, err := ft.StartUpload("up_session_mismatch", "docs/file.txt", "repo_123", "peer_bob", "hash123", 20)
+	netPort, _, err := ft.StartUpload("up_session_mismatch", "docs/file.txt", "repo_123", "peer_bob", "hash123", 20)
 	if err != nil {
 		t.Fatalf("StartUpload failed: %v", err)
 	}
@@ -411,4 +411,12 @@ func TestFileTransferUploadSizeMismatch(t *testing.T) {
 	if session.Error == nil {
 		t.Error("expected error, got nil")
 	}
+}
+
+func deriveFallbackPort(socketPath string) int {
+	h := uint32(2166136261)
+	for i := 0; i < len(socketPath); i++ {
+		h = (h ^ uint32(socketPath[i])) * 16777619
+	}
+	return 10000 + int(h % 20000)
 }
