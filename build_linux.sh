@@ -2,6 +2,7 @@
 set -e
 
 VERSION="${VERSION:-1.0.1}"
+VERSION="${VERSION#v}"
 APP_NAME="P2PVersionControl"
 
 echo "===================================================="

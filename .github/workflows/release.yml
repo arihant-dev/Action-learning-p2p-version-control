@@ -20,7 +20,7 @@ permissions:
   contents: write
 
 env:
-  VERSION: ${{ github.event_name == 'workflow_dispatch' && format('{0}', inputs.version) || github.ref_name }}
+  VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
 
 jobs:
   build-macos:
@@ -151,14 +151,14 @@ jobs:
 
       - name: Package Executables (.zip)
         run: |
-          $ver = "${{ env.VERSION }}"
+          $ver = "${{ env.VERSION }}".TrimStart('v')
           $zipPath = "target\P2PVersionControl-${ver}-windows-x64.zip"
           New-Item -ItemType Directory -Force -Path target
           Compress-Archive -Path build\go_coordinator.exe, build\p2p_daemon.exe -DestinationPath $zipPath
 
       - name: Build Windows Installer (.msi)
         run: |
-          $ver = "${{ env.VERSION }}"
+          $ver = "${{ env.VERSION }}".TrimStart('v')
           $appName = "P2PVersionControl"
           New-Item -ItemType Directory -Force -Path target\wix
 
