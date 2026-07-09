@@ -1,10 +1,12 @@
 package transfer
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -310,7 +312,11 @@ func (ft *FileTransferManager) finishSession(session *TransferSession, err error
 }
 
 func readFileForUpload(path string) (string, error) {
-	return "", fmt.Errorf("not implemented")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("read file for inline transfer: %w", err)
+	}
+	return base64.StdEncoding.EncodeToString(data), nil
 }
 
 func (ft *FileTransferManager) GetSession(transferID string) (TransferSession, bool) {
