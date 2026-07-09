@@ -37,7 +37,11 @@ target_link_libraries(p2p_daemon PRIVATE
     ${PLATFORM_LIBS}
 )
 
-target_compile_options(p2p_daemon PRIVATE -Wall -Wextra -Wpedantic)
+if(MSVC)
+    target_compile_options(p2p_daemon PRIVATE /W4)
+else()
+    target_compile_options(p2p_daemon PRIVATE -Wall -Wextra -Wpedantic)
+endif()
 
 set_target_properties(p2p_daemon PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
