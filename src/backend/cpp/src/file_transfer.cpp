@@ -31,6 +31,22 @@ static void closeSocket(int fd) {
 #endif
 }
 
+#ifdef _WIN32
+static ssize_t writeSocket(int fd, const void* buf, size_t count) {
+    return ::send(fd, static_cast<const char*>(buf), static_cast<int>(count), 0);
+}
+static ssize_t readSocket(int fd, void* buf, size_t count) {
+    return ::recv(fd, static_cast<char*>(buf), static_cast<int>(count), 0);
+}
+#else
+static ssize_t writeSocket(int fd, const void* buf, size_t count) {
+    return ::write(fd, buf, count);
+}
+static ssize_t readSocket(int fd, void* buf, size_t count) {
+    return ::read(fd, buf, count);
+}
+#endif
+
 void handle_file_transfer(
     const std::string& watch_path,
     const std::string& rel_path,
@@ -108,7 +124,7 @@ void handle_file_transfer(
                 long long to_read = std::min(4096LL, expected_size - total_received);
                 if (to_read <= 0) break;
 
-                ssize_t n = ::read(sock_fd, buffer, to_read);
+                ssize_t n = readSocket(sock_fd, buffer, to_read);
                 if (n < 0) {
                     if (errno == EAGAIN || errno == EWOULDBLOCK) {
                         std::cerr << "[C++ Daemon] Socket read timeout\n";
@@ -188,7 +204,7 @@ void handle_file_transfer(
 
                 ssize_t written = 0;
                 while (written < bytes) {
-                    ssize_t n = ::write(sock_fd, buffer + written, bytes - written);
+                    ssize_t n = writeSocket(sock_fd, buffer + written, bytes - written);
                     if (n < 0) {
                         if (errno == EAGAIN || errno == EWOULDBLOCK) {
                             std::cerr << "[C++ Daemon] Socket write timeout\n";
@@ -303,7 +319,7 @@ void handle_chunked_file_upload(
 
         ssize_t written = 0;
         while (written < bytes_read) {
-            ssize_t n = ::write(sock_fd, buffer.data() + written, bytes_read - written);
+            ssize_t n = writeSocket(sock_fd, buffer.data() + written, bytes_read - written);
             if (n < 0) {
                 std::cerr << "[C++ Daemon] Error: Socket write error during chunked upload: " << errno << "\n";
                 infile.close();
