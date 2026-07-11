@@ -340,7 +340,7 @@ def test_network_partition():
 
 
 def test_large_file_transfer():
-    """Test 5: Create 100MB file on peer 1 — verify on peer 2."""
+    """Test 5: Create 1MB file on peer 1 — verify on peer 2."""
     log("\n=== TEST: Large File Transfer ===")
 
     peer_ids = ["peer-large-a", "peer-large-b"]
@@ -361,15 +361,14 @@ def test_large_file_transfer():
     for pid in peer_ids:
         add_repository(peers[pid]["sock"], "large-repo", peers[pid]["dir"])
 
-    time.sleep(2.0)
+    time.sleep(5.0)
 
-    # Create a 1MB test file (smaller for test speed)
-    log("Creating 1MB test file...")
     content = "X" * 1024 * 1024
+    log("Creating 1MB test file...")
     create_file(peers["peer-large-a"]["dir"], "large_file.dat", content)
 
     log("Waiting for large file sync...")
-    synced = check_file_exists(peers["peer-large-b"]["dir"], "large_file.dat", content, timeout=60)
+    synced = check_file_exists(peers["peer-large-b"]["dir"], "large_file.dat", content, timeout=90)
 
     if synced:
         log("TEST PASSED: Large File Transfer")
@@ -412,6 +411,7 @@ def main():
         ("three_peer_sync", test_three_peer_sync),
         ("concurrent_edits", test_concurrent_edits),
         ("network_partition", test_network_partition),
+        ("large_file_transfer", test_large_file_transfer),
         ("daemon_crash_recovery", test_daemon_crash_recovery),
         ("chain_replication", test_chain_replication),
     ]

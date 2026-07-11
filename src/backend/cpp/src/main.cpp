@@ -13,6 +13,7 @@
 #include <string>
 #include <thread>
 #include <chrono>
+#include <fstream>
 
 #ifdef _WIN32
 #include <io.h>
@@ -210,8 +211,20 @@ int main(int argc, char* argv[]) {
 
             if (event.type != WatchEventType::Deleted && fs::exists(abs_path)) {
                 try {
-                    size = fs::file_size(abs_path);
-                    crypto::sha256_file(abs_path.string(), hash);
+                    // Read file content once to compute both size and hash
+                    // atomically, avoiding TOCTOU races where the file is
+                    // modified between the size and hash calls.
+                    {
+                        std::ifstream file(abs_path.string(), std::ios::binary | std::ios::ate);
+                        if (file) {
+                            size = file.tellg();
+                            file.seekg(0, std::ios::beg);
+                            std::string content(static_cast<std::size_t>(size), '\0');
+                            if (file.read(content.data(), static_cast<std::streamsize>(size))) {
+                                hash = crypto::sha256(content);
+                            }
+                        }
+                    }
                     auto write_time = fs::last_write_time(abs_path);
                     #ifdef _WIN32
                     auto sctp = std::chrono::clock_cast<std::chrono::system_clock>(write_time);

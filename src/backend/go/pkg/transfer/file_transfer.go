@@ -93,6 +93,9 @@ func (ft *FileTransferManager) StartDownload(transferID, filePath, repoID, peerI
 	if err != nil {
 		netConn.Close()
 		localListener.Close()
+		ft.mu.Lock()
+		delete(ft.sessions, transferID)
+		ft.mu.Unlock()
 		return fmt.Errorf("marshal download payload: %w", err)
 	}
 	msg.Payload = payloadBytes
@@ -160,6 +163,9 @@ func (ft *FileTransferManager) StartUpload(transferID, filePath, repoID, peerID,
 	if err != nil {
 		netListener.Close()
 		localListener.Close()
+		ft.mu.Lock()
+		delete(ft.sessions, transferID)
+		ft.mu.Unlock()
 		return 0, "", fmt.Errorf("marshal upload payload: %w", err)
 	}
 	msg.Payload = payloadBytes
@@ -190,8 +196,16 @@ func (ft *FileTransferManager) streamDownload(session *TransferSession) {
 	session.Status = "streaming"
 	session.mu.Unlock()
 
-	_ = session.NetConn.SetReadDeadline(time.Now().Add(30 * time.Second))
-	_ = localConn.SetWriteDeadline(time.Now().Add(30 * time.Second))
+	timeout := 30 * time.Second
+	if session.ExpectedSize > 0 {
+		perMB := 10 * time.Second
+		needed := time.Duration(session.ExpectedSize/(1024*1024)) * perMB
+		if needed > timeout {
+			timeout = needed
+		}
+	}
+	_ = session.NetConn.SetReadDeadline(time.Now().Add(timeout))
+	_ = localConn.SetWriteDeadline(time.Now().Add(timeout))
 
 	limitReader := io.LimitReader(session.NetConn, session.ExpectedSize)
 	copied, err := io.Copy(localConn, limitReader)
@@ -241,8 +255,16 @@ func (ft *FileTransferManager) streamUpload(session *TransferSession, netListene
 	session.Status = "streaming"
 	session.mu.Unlock()
 
-	_ = localConn.SetReadDeadline(time.Now().Add(30 * time.Second))
-	_ = session.NetConn.SetWriteDeadline(time.Now().Add(30 * time.Second))
+	timeout := 30 * time.Second
+	if session.ExpectedSize > 0 {
+		perMB := 10 * time.Second
+		needed := time.Duration(session.ExpectedSize/(1024*1024)) * perMB
+		if needed > timeout {
+			timeout = needed
+		}
+	}
+	_ = localConn.SetReadDeadline(time.Now().Add(timeout))
+	_ = session.NetConn.SetWriteDeadline(time.Now().Add(timeout))
 
 	limitReader := io.LimitReader(localConn, session.ExpectedSize)
 	copied, err := io.Copy(session.NetConn, limitReader)
@@ -308,6 +330,18 @@ func (ft *FileTransferManager) finishSession(session *TransferSession, err error
 	} else {
 		completeMsg.Payload = payloadBytes
 		ft.ipcServer.SendMessage(completeMsg)
+	}
+}
+
+func (ft *FileTransferManager) CleanupStaleSessions() {
+	ft.mu.Lock()
+	defer ft.mu.Unlock()
+	for id, s := range ft.sessions {
+		s.mu.Lock()
+		if s.Status == "completed" || s.Status == "failed" {
+			delete(ft.sessions, id)
+		}
+		s.mu.Unlock()
 	}
 }
 

@@ -24,7 +24,19 @@ class RepositoryListControllerTest {
     @Test
     void testShutdownWithoutInitialize() {
         RepositoryListController controller = new RepositoryListController();
-        // Call shutdown without initialize - should handle gracefully
         assertDoesNotThrow(controller::shutdown);
+    }
+
+    @Test
+    void testSettingsPersistence() {
+        String theme = SettingsDialog.getSetting("theme", "dark");
+        assertNotNull(theme);
+        assertTrue(theme.equals("dark") || theme.equals("light"));
+    }
+
+    @Test
+    void testSettingsIntValue() {
+        int port = SettingsDialog.getSetting("p2p_port", 9876);
+        assertTrue(port > 0 && port <= 65535, "Port should be in valid range");
     }
 }

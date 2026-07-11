@@ -10,14 +10,28 @@ public class ConflictDialog extends Dialog<String> {
         setTitle("Conflict Detected");
         setHeaderText("Concurrent edit detected on: " + filePath);
 
+        try {
+            getDialogPane().getStylesheets().addAll(
+                HelloApplication.class.getResource("styles.css").toExternalForm(),
+                HelloApplication.class.getResource("dark.css").toExternalForm()
+            );
+            getDialogPane().getStyleClass().add("root");
+        } catch (Exception ignored) {}
+
         VBox content = new VBox(10);
         content.setPadding(new Insets(20));
 
         Label info = new Label("This file was modified by " + localPeer + " (you) and " + remotePeer + " simultaneously.");
 
+        if (!localVersion.isEmpty() && !remoteVersion.isEmpty()) {
+            Label versions = new Label("Local hash: " + localVersion + "\nRemote hash: " + remoteVersion);
+            versions.setStyle("-fx-text-fill: #94a3b8; -fx-font-family: monospace;");
+            content.getChildren().add(versions);
+        }
+
         ToggleGroup group = new ToggleGroup();
-        RadioButton keepLocal = new RadioButton("Keep Local \u2013 Your version wins");
-        RadioButton acceptRemote = new RadioButton("Accept Remote \u2013 Their version wins");
+        RadioButton keepLocal = new RadioButton("Keep Local - Your version wins");
+        RadioButton acceptRemote = new RadioButton("Accept Remote - Their version wins");
         RadioButton manualMerge = new RadioButton("Mark for Manual Merge");
         keepLocal.setToggleGroup(group);
         acceptRemote.setToggleGroup(group);

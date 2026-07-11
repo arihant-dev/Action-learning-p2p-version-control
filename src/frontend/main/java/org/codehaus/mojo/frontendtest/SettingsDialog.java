@@ -162,9 +162,13 @@ public class SettingsDialog {
         root.getChildren().addAll(tabPane, buttonBar);
 
         Scene scene = new Scene(root, 420, 320);
-        scene.getStylesheets().add(HelloApplication.class.getResource("styles.css").toExternalForm());
-        String activeTheme = getSetting("theme", "dark");
-        scene.getStylesheets().add(HelloApplication.class.getResource(activeTheme + ".css").toExternalForm());
+        try {
+            scene.getStylesheets().add(HelloApplication.class.getResource("styles.css").toExternalForm());
+            String activeTheme = getSetting("theme", "dark");
+            scene.getStylesheets().add(HelloApplication.class.getResource(activeTheme + ".css").toExternalForm());
+        } catch (Exception e) {
+            System.err.println("Failed to load stylesheet: " + e.getMessage());
+        }
 
         stage.setScene(scene);
 

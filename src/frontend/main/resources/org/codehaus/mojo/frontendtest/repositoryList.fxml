@@ -11,6 +11,14 @@
         <Insets topRightBottomLeft="20"/>
     </padding>
 
+    <MenuBar fx:id="menuBar">
+        <Menu text="File">
+            <MenuItem text="Preferences..." onAction="#handleSettings"/>
+            <SeparatorMenuItem/>
+            <MenuItem text="Quit" onAction="#handleQuit"/>
+        </Menu>
+    </MenuBar>
+
     <Label styleClass="title-label" text="P2P Version Control"/>
     <Label styleClass="section-label" text="Tracked Repositories"/>
     <ListView fx:id="repoListView" onMouseClicked="#handleRepoClick" maxWidth="Infinity" VBox.vgrow="ALWAYS"/>

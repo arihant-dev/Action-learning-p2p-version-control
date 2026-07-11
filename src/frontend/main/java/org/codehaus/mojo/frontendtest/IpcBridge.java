@@ -362,7 +362,13 @@ public class IpcBridge {
                 List<MessageListener> list = listeners.get(type);
                 if (list != null) {
                     for (MessageListener listener : list) {
-                        Platform.runLater(() -> listener.onMessage(payload));
+                        Platform.runLater(() -> {
+                            try {
+                                listener.onMessage(payload);
+                            } catch (Exception e) {
+                                System.err.println("[Java] Listener exception for type '" + type + "': " + e.getMessage());
+                            }
+                        });
                     }
                 }
             } catch (Exception e) {
@@ -411,6 +417,11 @@ public class IpcBridge {
         if (list != null) {
             list.remove(listener);
         }
+    }
+
+    public boolean isConnected() {
+        SocketChannel channel = socketChannel;
+        return channel != null && channel.isConnected();
     }
 
     public synchronized void disconnect() {

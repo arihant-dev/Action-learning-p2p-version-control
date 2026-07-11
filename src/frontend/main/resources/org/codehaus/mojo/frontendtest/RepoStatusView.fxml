@@ -20,9 +20,9 @@
 
     <!-- Title bar -->
     <top>
-        <HBox alignment="CENTER_LEFT" style="-fx-border-color: #334155; -fx-border-width: 0 0 1 0; -fx-padding: 12 15 12 15;" spacing="10">
+        <HBox alignment="CENTER_LEFT" style="-fx-border-color: -theme-border; -fx-border-width: 0 0 1 0; -fx-padding: 12 15 12 15;" spacing="10">
             <Label fx:id="repoNameLabel" text="Repository name" styleClass="title-label" HBox.hgrow="ALWAYS" maxWidth="Infinity"/>
-            <Button text="Add Peer" onAction="#handleAddPeer" style="-fx-background-color: #3b82f6; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 5 10 5 10; -fx-background-radius: 4;"/>
+            <Button text="Add Peer" onAction="#handleAddPeer" style="-fx-background-color: -theme-accent; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 5 10 5 10; -fx-background-radius: 4;"/>
         </HBox>
     </top>
 
@@ -38,7 +38,7 @@
 
             <!-- Left panel -->
             <VBox GridPane.columnIndex="0" GridPane.rowIndex="0"
-                  style="-fx-border-color: #334155; -fx-border-width: 0 1 0 0; -fx-padding: 10;">
+                  style="-fx-border-color: -theme-border; -fx-border-width: 0 1 0 0; -fx-padding: 10;">
                 <Label text="Files in Repository" styleClass="section-label"/>
                 <ListView fx:id="filesListView" VBox.vgrow="ALWAYS"
                           style="-fx-background-color: transparent;"/>
@@ -57,13 +57,13 @@
     <!-- Bottom status bar -->
     <bottom>
         <HBox alignment="CENTER_LEFT"
-              style="-fx-border-color: #334155; -fx-border-width: 1 0 0 0; -fx-background-color: #1e293b;">
+              style="-fx-border-color: -theme-border; -fx-border-width: 1 0 0 0; -fx-background-color: -theme-bg-secondary;">
             <Label fx:id="syncStatusLabel" text="sync status: Initializing"
-                   style="-fx-padding: 8 12 8 12; -fx-border-color: #334155; -fx-border-width: 0 1 0 0; -fx-text-fill: #94a3b8;"  HBox.hgrow="ALWAYS"  maxWidth="Infinity"/>
+                   style="-fx-padding: 8 12 8 12; -fx-border-color: -theme-border; -fx-border-width: 0 1 0 0; -fx-text-fill: -theme-text-muted;"  HBox.hgrow="ALWAYS"  maxWidth="Infinity"/>
             <Label fx:id="peersLabel" text="peers: 0"
-                   style="-fx-padding: 8 12 8 12; -fx-border-color: #334155; -fx-border-width: 0 1 0 0; -fx-text-fill: #94a3b8;"   HBox.hgrow="ALWAYS"  maxWidth="Infinity"/>
+                   style="-fx-padding: 8 12 8 12; -fx-border-color: -theme-border; -fx-border-width: 0 1 0 0; -fx-text-fill: -theme-text-muted;"   HBox.hgrow="ALWAYS"  maxWidth="Infinity"/>
             <Label fx:id="onlineStatusLabel" text="Offline"
-                   style="-fx-padding: 8 12 8 12; -fx-text-fill: #ef4444; -fx-font-weight: bold;"  HBox.hgrow="ALWAYS"  maxWidth="Infinity"/>
+                   style="-fx-padding: 8 12 8 12; -fx-text-fill: -theme-danger; -fx-font-weight: bold;"  HBox.hgrow="ALWAYS"  maxWidth="Infinity"/>
         </HBox>
     </bottom>
 

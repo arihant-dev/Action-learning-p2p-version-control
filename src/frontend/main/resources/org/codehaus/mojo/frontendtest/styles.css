@@ -83,11 +83,11 @@
 }
 
 .button-danger {
-    -fx-background-color: #dc2626;
+    -fx-background-color: -theme-danger;
 }
 
 .button-danger:hover {
-    -fx-background-color: #b91c1c;
+    -fx-background-color: derive(-theme-danger, -10%);
 }
 
 .button-icon {
@@ -139,4 +139,42 @@
 
 .text-field:focused {
     -fx-border-color: -theme-accent;
+}
+
+.menu-bar {
+    -fx-background-color: -theme-card-bg;
+    -fx-border-color: -theme-border;
+    -fx-border-width: 0 0 1 0;
+}
+
+.menu-bar .menu-button {
+    -fx-text-fill: -theme-text-main;
+}
+
+.menu-bar .menu-button:hover {
+    -fx-background-color: -theme-border-hover;
+}
+
+.menu-item {
+    -fx-text-fill: -theme-text-main;
+}
+
+.context-menu {
+    -fx-background-color: -theme-card-bg;
+    -fx-border-color: -theme-border;
+}
+
+.status-bar-label {
+    -fx-padding: 8 12 8 12;
+    -fx-text-fill: -theme-text-muted;
+}
+
+.status-online {
+    -fx-text-fill: -theme-success;
+    -fx-font-weight: bold;
+}
+
+.status-offline {
+    -fx-text-fill: -theme-danger;
+    -fx-font-weight: bold;
 }

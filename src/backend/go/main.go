@@ -254,7 +254,7 @@ func main() {
 	ipcServer.OnMessage = func(msg *ipc.Message) error {
 		fmt.Printf("Received from C++: %s\n", msg.Type)
 
-		if msg.Type == "file_changed" || msg.Type == "add_repository" || msg.Type == "remove_repository" || msg.Type == "repo_list_request" || msg.Type == "repo_status_request" {
+		if msg.Type == "file_changed" || msg.Type == "add_repository" || msg.Type == "remove_repository" || msg.Type == "repo_list_request" || msg.Type == "repo_status_request" || msg.Type == "conflict_resolution" || msg.Type == "share_repository" || msg.Type == "join_repository" {
 			return coord.HandleIPCMessage(msg)
 		}
 

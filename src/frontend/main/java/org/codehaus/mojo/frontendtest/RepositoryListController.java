@@ -27,6 +27,8 @@ public class RepositoryListController {
     private VBox rootContainer;
     @FXML
     private Button themeToggleButton;
+    @FXML
+    private MenuBar menuBar;
     private boolean isDarkMode = true;
 
     private Timeline pollTimeline;
@@ -55,10 +57,13 @@ public class RepositoryListController {
             }
         });
 
+        String savedTheme = SettingsDialog.getSetting("theme", "dark");
+        isDarkMode = "dark".equals(savedTheme);
         rootContainer.getStylesheets().addAll(
                 getClass().getResource("styles.css").toExternalForm(),
-                getClass().getResource("dark.css").toExternalForm()
+                getClass().getResource(savedTheme + ".css").toExternalForm()
         );
+        themeToggleButton.setText(isDarkMode ? "lightmode" : "darkmode");
     }
 
     public void shutdown() {
@@ -80,9 +85,9 @@ public class RepositoryListController {
 
         repoListView.getItems().clear();
         for (JsonElement repoEl : repos) {
-            if (repoEl.isJsonObject()) {
+            if (repoEl != null && repoEl.isJsonObject()) {
                 JsonObject repoObj = repoEl.getAsJsonObject();
-                if (repoObj.has("id")) {
+                if (repoObj.has("id") && !repoObj.get("id").isJsonNull()) {
                     repoListView.getItems().add(repoObj.get("id").getAsString());
                 }
             }
@@ -108,6 +113,18 @@ public class RepositoryListController {
             themeToggleButton.setText("lightmode");
             isDarkMode = true;
         }
+    }
+
+    @FXML
+    protected void handleSettings() {
+        Stage stage = (Stage) rootContainer.getScene().getWindow();
+        SettingsDialog.show(stage);
+    }
+
+    @FXML
+    protected void handleQuit() {
+        shutdown();
+        Platform.exit();
     }
 
     @FXML
@@ -146,11 +163,16 @@ public class RepositoryListController {
     protected void handleShareRepo() {
         String selected = repoListView.getSelectionModel().getSelectedItem();
         if (selected == null) {
-            Alert alert = new Alert(Alert.AlertType.WARNING, "Please select a repository to share first.", ButtonType.OK);
-            alert.showAndWait();
+            showAlert("No Repository Selected", "Please select a repository to share first.");
             return;
         }
-        Alert alert = new Alert(Alert.AlertType.INFORMATION, "Repository " + selected + " is automatically discoverable on your local network for other peers!", ButtonType.OK);
+
+        JsonObject payload = new JsonObject();
+        payload.addProperty("repo_id", selected);
+        IpcBridge.getInstance().send("share_repository", payload);
+
+        Alert alert = new Alert(Alert.AlertType.INFORMATION,
+            "Repository " + selected + " is being shared with all connected peers.", ButtonType.OK);
         alert.setTitle("Share Repository");
         alert.setHeaderText(null);
         alert.showAndWait();
@@ -186,10 +208,21 @@ public class RepositoryListController {
         TextField path = new TextField();
         path.setPromptText("e.g. /path/to/local/folder");
 
+        Button browseBtn = new Button("Browse...");
+        browseBtn.setOnAction(e -> {
+            javafx.stage.DirectoryChooser dirChooser = new javafx.stage.DirectoryChooser();
+            dirChooser.setTitle("Select Repository Folder");
+            java.io.File selectedDir = dirChooser.showDialog(dialog.getOwner());
+            if (selectedDir != null) {
+                path.setText(selectedDir.getAbsolutePath());
+            }
+        });
+
         grid.add(new Label("Repo ID:"), 0, 0);
         grid.add(repoId, 1, 0);
         grid.add(new Label("Local Path:"), 0, 1);
         grid.add(path, 1, 1);
+        grid.add(browseBtn, 2, 1);
 
         dialog.getDialogPane().setContent(grid);
 
@@ -206,11 +239,46 @@ public class RepositoryListController {
         });
 
         dialog.showAndWait().ifPresent(result -> {
-            if (!result.get("repo_id").isEmpty() && !result.get("path").isEmpty()) {
-                IpcBridge.getInstance().send("add_repository", result);
-                IpcBridge.getInstance().send("repo_list_request", new Object());
+            String repoIdValue = result.get("repo_id");
+            String pathValue = result.get("path");
+
+            if (repoIdValue.isEmpty()) {
+                showAlert("Validation Error", "Repository ID cannot be empty.");
+                return;
             }
+            if (pathValue.isEmpty()) {
+                showAlert("Validation Error", "Local path cannot be empty.");
+                return;
+            }
+            if (!isJoin) {
+                java.io.File pathDir = new java.io.File(pathValue);
+                if (!pathDir.exists()) {
+                    showAlert("Validation Error", "The specified path does not exist: " + pathValue);
+                    return;
+                }
+                if (!pathDir.isDirectory()) {
+                    showAlert("Validation Error", "The specified path is not a directory: " + pathValue);
+                    return;
+                }
+            }
+
+            if (isJoin) {
+                JsonObject payload = new JsonObject();
+                payload.addProperty("repo_id", repoIdValue);
+                payload.addProperty("path", pathValue);
+                IpcBridge.getInstance().send("join_repository", payload);
+            } else {
+                IpcBridge.getInstance().send("add_repository", result);
+            }
+            IpcBridge.getInstance().send("repo_list_request", new Object());
         });
+    }
+
+    private void showAlert(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.WARNING, message, ButtonType.OK);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.showAndWait();
     }
 
     @FXML
