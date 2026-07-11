@@ -2,7 +2,7 @@ module org.codehaus.mojo.frontendtest {
     requires javafx.controls;
     requires javafx.fxml;
 
-    requires org.controlsfx.controls;
+    requires org.kordamp.ikonli.core;
     requires org.kordamp.ikonli.javafx;
     requires javafx.graphics;
     requires com.google.gson;

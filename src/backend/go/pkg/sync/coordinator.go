@@ -969,6 +969,119 @@ func (sc *SyncCoordinator) HandleIPCMessage(msg *ipc.Message) error {
 		}
 		sc.ipcServer.SendMessage(resp)
 		return nil
+
+	case "conflict_resolution":
+		var payload struct {
+			RepoID     string `json:"repo_id"`
+			Path       string `json:"path"`
+			Resolution string `json:"resolution"`
+			PeerID     string `json:"peer_id"`
+		}
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			return err
+		}
+		return sc.HandleConflictResolution(payload.RepoID, payload.Path, payload.Resolution, payload.PeerID)
+
+	case "share_repository":
+		var payload struct {
+			RepoID string `json:"repo_id"`
+		}
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			return err
+		}
+		sc.mu.RLock()
+		defer sc.mu.RUnlock()
+
+		files, err := sc.db.Metadata().ListByRepository(payload.RepoID, false)
+		if err != nil {
+			return fmt.Errorf("list files for share: %w", err)
+		}
+
+		conns := sc.connMgr.ActiveConnections()
+		for peerID := range conns {
+			for _, f := range files {
+				sc.sendMetadataUpdateToPeer(peerID, payload.RepoID, f.Filepath, f.Size, uint64(f.Version), f.Hash, f.LocalLastModified, f.IsDeleted, f.Mode)
+			}
+		}
+
+		resp := &ipc.Message{
+			Version:   "1.0",
+			Type:      "share_repository_response",
+			Source:    "go",
+			Timestamp: time.Now().UnixNano() / int64(time.Millisecond),
+		}
+		respPayload, _ := json.Marshal(map[string]interface{}{
+			"repo_id":    payload.RepoID,
+			"peer_count": len(conns),
+		})
+		resp.Payload = respPayload
+		sc.ipcServer.SendMessage(resp)
+		return nil
+
+	case "join_repository":
+		var payload struct {
+			RepoID string `json:"repo_id"`
+			Path   string `json:"path"`
+		}
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			return err
+		}
+		if err := sc.AddRepository(payload.RepoID, payload.Path); err != nil {
+			return fmt.Errorf("add repository for join: %w", err)
+		}
+		conns := sc.connMgr.ActiveConnections()
+		for peerID := range conns {
+			sc.SyncAllRepositoriesWithPeer(peerID)
+		}
+		return nil
+	}
+	return nil
+}
+
+// HandleConflictResolution processes a user's conflict resolution decision
+// received from the C++ UI via IPC.
+func (sc *SyncCoordinator) HandleConflictResolution(repoID, path, resolution, peerID string) error {
+	switch resolution {
+	case "local":
+		meta, err := sc.db.Metadata().Get(repoID, path)
+		if err != nil {
+			return fmt.Errorf("get local metadata for conflict resolution: %w", err)
+		}
+		if meta != nil {
+			sc.sendMetadataUpdateToPeer(peerID, repoID, path, meta.Size, uint64(meta.Version), meta.Hash, meta.LocalLastModified, meta.IsDeleted, meta.Mode)
+		}
+		sc.db.History().LogEvent(&sqlite.SyncEvent{
+			EventID:      fmt.Sprintf("conflict_resolved_%d", time.Now().UnixNano()),
+			RepositoryID: repoID,
+			FilePath:     path,
+			PeerID:       peerID,
+			Timestamp:    time.Now().Unix(),
+			EventType:    "conflict_resolved",
+			Status:       "local_kept",
+		})
+	case "remote":
+		_ = sc.db.Metadata().HardDelete(repoID, path)
+		sc.db.History().LogEvent(&sqlite.SyncEvent{
+			EventID:      fmt.Sprintf("conflict_resolved_%d", time.Now().UnixNano()),
+			RepositoryID: repoID,
+			FilePath:     path,
+			PeerID:       peerID,
+			Timestamp:    time.Now().Unix(),
+			EventType:    "conflict_resolved",
+			Status:       "remote_accepted",
+		})
+	case "merge":
+		sc.db.History().LogEvent(&sqlite.SyncEvent{
+			EventID:      fmt.Sprintf("conflict_resolved_%d", time.Now().UnixNano()),
+			RepositoryID: repoID,
+			FilePath:     path,
+			PeerID:       peerID,
+			Timestamp:    time.Now().Unix(),
+			EventType:    "conflict_resolved",
+			Status:       "manual_merge",
+		})
+	default:
+		return fmt.Errorf("unknown conflict resolution: %s", resolution)
 	}
 	return nil
 }

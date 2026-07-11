@@ -30,9 +30,9 @@
       <version>21.0.6</version>
     </dependency>
 <dependency>
-      <groupId>org.controlsfx</groupId>
-      <artifactId>controlsfx</artifactId>
-      <version>11.2.1</version>
+      <groupId>org.kordamp.ikonli</groupId>
+      <artifactId>ikonli-core</artifactId>
+      <version>12.3.1</version>
     </dependency><dependency>
       <groupId>org.kordamp.ikonli</groupId>
       <artifactId>ikonli-javafx</artifactId>
@@ -53,6 +53,7 @@
 
   <build>
     <sourceDirectory>src/frontend/main/java</sourceDirectory>
+    <testSourceDirectory>src/frontend/test/java</testSourceDirectory>
     <resources>
       <resource>
         <directory>src/frontend/main/resources</directory>
@@ -87,6 +88,17 @@
             </configuration>
           </execution>
         </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.2.5</version>
+        <configuration>
+          <argLine>
+            --add-opens javafx.graphics/com.sun.glass.ui=ALL-UNNAMED
+            --add-opens javafx.controls/com.sun.javafx.application=ALL-UNNAMED
+          </argLine>
+        </configuration>
       </plugin>
     </plugins>
   </build>

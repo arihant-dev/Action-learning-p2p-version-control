@@ -7,7 +7,6 @@ class IpcBridgeTest {
 
     @BeforeEach
     void setUp() {
-        // Ensure clean state by disconnecting before each test
         IpcBridge bridge = IpcBridge.getInstance();
         bridge.disconnect();
     }
@@ -75,5 +74,32 @@ class IpcBridgeTest {
         assertDoesNotThrow(() -> {
             bridge.removeListener("nonexistent_type", listener);
         }, "removeListener() for non-existent type should not throw");
+    }
+
+    @Test
+    void testIsConnectedBeforeConnect() {
+        IpcBridge bridge = IpcBridge.getInstance();
+        assertFalse(bridge.isConnected(), "isConnected() should be false before connect()");
+    }
+
+    @Test
+    void testSendNullPayload() {
+        IpcBridge bridge = IpcBridge.getInstance();
+        assertDoesNotThrow(() -> {
+            bridge.send("test_type", null);
+        });
+    }
+
+    @Test
+    void testMultipleListenersSameType() {
+        IpcBridge bridge = IpcBridge.getInstance();
+        IpcBridge.MessageListener listener1 = payload -> {};
+        IpcBridge.MessageListener listener2 = payload -> {};
+        bridge.registerListener("multi_type", listener1);
+        assertDoesNotThrow(() -> {
+            bridge.registerListener("multi_type", listener2);
+        }, "Should support multiple listeners for same type");
+        bridge.removeListener("multi_type", listener1);
+        bridge.removeListener("multi_type", listener2);
     }
 }

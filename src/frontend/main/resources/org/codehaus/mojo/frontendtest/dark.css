@@ -11,4 +11,10 @@
 
     -theme-accent: #3b82f6;
     -theme-accent-hover: #2563eb;
+
+    -theme-success: #10b981;
+    -theme-danger: #ef4444;
+    -theme-bg-secondary: #1e293b;
+    -theme-accent-blue: #3b82f6;
+    -theme-warning: #f59e0b;
 }
