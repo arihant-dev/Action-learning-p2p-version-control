@@ -119,12 +119,20 @@ apidocs/
 *.lot
 *.lof
 
-# Agentic context (local agent knowledge graphs, not published)
-# .agents/  # Uncommented — agents version their output via branches
+# Agentic context — keep locally, never push
+.agents/
+AGENTS_SESSION.md
+AGENTS*.md
 
 # Local context (not published)
 .project_context.md
 .agent_notes.md
+
+# Presentation/thesis documents (local only)
+P2P_Presentation.md
+thesis_pending_parts.*
+Declaration Of Work.pdf
+slides/
 
 # Runtime artifacts
 p2p_sync.db

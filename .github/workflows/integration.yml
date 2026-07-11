@@ -44,7 +44,7 @@ jobs:
 
       - name: Run E2E integration tests
         run: |
-          python3 .agents/skills/p2p-multi-agent-testing/scripts/integration_harness.py
+          python3 scripts/integration_harness.py
 
       - name: Upload logs on failure
         if: failure()
