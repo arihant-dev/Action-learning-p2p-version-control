@@ -1,20 +1,20 @@
 .root {
-    -theme-bg: #f8fafc;
-    -theme-text-main: #0f172a;
-    -theme-text-muted: #64748b;
-    -theme-text-secondary: #334155;
-    -theme-text-highlight: #000000;
+    -theme-bg: #f9f9f9;                  /* Bone White */
+    -theme-text-main: #1a1a1a;           /* Deep Charcoal */
+    -theme-text-muted: #5d5f5f;          /* Neutral Grey */
+    -theme-text-secondary: #444748;      /* On-Surface Variant */
+    -theme-text-highlight: #000000;      /* Stark Black */
 
-    -theme-card-bg: #ffffff;
-    -theme-border: #cbd5e1;
-    -theme-border-hover: #94a3b8;
+    -theme-card-bg: #ffffff;             /* Surface Container Lowest */
+    -theme-border: #1a1a1a;              /* Deep Charcoal Border */
+    -theme-border-hover: #1a1a1a;
 
-    -theme-accent: #3b82f6;
-    -theme-accent-hover: #1d4ed8;
+    -theme-accent: #1a1a1a;              /* Primary Action */
+    -theme-accent-hover: #000000;
 
-    -theme-success: #059669;
-    -theme-danger: #dc2626;
-    -theme-bg-secondary: #f1f5f9;
-    -theme-accent-blue: #3b82f6;
-    -theme-warning: #d97706;
+    -theme-success: #1a1a1a;
+    -theme-danger: #ff4f00;              /* International Orange */
+    -theme-bg-secondary: #eeeeee;        /* Surface Container (Low) */
+    -theme-accent-blue: #1a1a1a;
+    -theme-warning: #ff4f00;             /* International Orange */
 }

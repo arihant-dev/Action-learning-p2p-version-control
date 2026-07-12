@@ -20,19 +20,38 @@ public class HelloApplication extends Application {
         splash.setStyle("-fx-background-color: -theme-bg;");
         splash.setPrefSize(360, 550);
 
-        VBox splashContent = new VBox(15);
+        VBox splashContent = new VBox(20);
         splashContent.setAlignment(javafx.geometry.Pos.CENTER);
+        splashContent.setPadding(new javafx.geometry.Insets(40));
 
-        Label titleLabel = new Label("P2P Version Control");
-        titleLabel.setStyle("-fx-font-size: 20px; -fx-font-weight: bold; -fx-text-fill: -theme-text-main;");
+        VBox titleContainer = new VBox(10);
+        titleContainer.setAlignment(javafx.geometry.Pos.CENTER);
+        titleContainer.setStyle("-fx-border-color: -theme-border; -fx-border-width: 1px; -fx-padding: 24px;");
 
-        Label statusLabel = new Label("Connecting to sync daemon...");
-        statusLabel.setStyle("-fx-text-fill: -theme-text-muted;");
+        Label titleLabel = new Label("AXON");
+        titleLabel.setStyle("-fx-font-family: 'Hanken Grotesk', sans-serif; -fx-font-size: 54px; -fx-font-weight: 900; -fx-text-fill: -theme-text-main; -fx-letter-spacing: -0.04em;");
+
+        javafx.scene.shape.Line line = new javafx.scene.shape.Line(0, 0, 80, 0);
+        line.setStyle("-fx-stroke: -theme-border; -fx-stroke-width: 2px;");
+
+        Label subtitleLabel = new Label("PEER-TO-PEER VERSION CONTROL");
+        subtitleLabel.setStyle("-fx-font-family: 'Hanken Grotesk', sans-serif; -fx-font-size: 11px; -fx-font-weight: 800; -fx-text-fill: -theme-text-muted; -fx-letter-spacing: 0.1em;");
+
+        titleContainer.getChildren().addAll(titleLabel, line, subtitleLabel);
+
+        VBox statusContainer = new VBox(12);
+        statusContainer.setAlignment(javafx.geometry.Pos.CENTER);
+
+        Label statusLabel = new Label("INITIALIZING MESH...");
+        statusLabel.setStyle("-fx-font-family: 'JetBrains Mono', monospace; -fx-font-size: 12px; -fx-font-weight: bold; -fx-text-fill: -theme-danger;");
 
         ProgressIndicator progress = new ProgressIndicator();
-        progress.setPrefSize(40, 40);
+        progress.setPrefSize(30, 30);
+        progress.setStyle("-fx-progress-color: -theme-danger;");
 
-        splashContent.getChildren().addAll(titleLabel, progress, statusLabel);
+        statusContainer.getChildren().addAll(progress, statusLabel);
+
+        splashContent.getChildren().addAll(titleContainer, statusContainer);
         splash.getChildren().add(splashContent);
 
         Scene splashScene = new Scene(splash, 360, 550);

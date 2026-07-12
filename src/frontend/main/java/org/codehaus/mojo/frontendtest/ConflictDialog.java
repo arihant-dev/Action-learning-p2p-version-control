@@ -25,7 +25,7 @@ public class ConflictDialog extends Dialog<String> {
 
         if (!localVersion.isEmpty() && !remoteVersion.isEmpty()) {
             Label versions = new Label("Local hash: " + localVersion + "\nRemote hash: " + remoteVersion);
-            versions.setStyle("-fx-text-fill: #94a3b8; -fx-font-family: monospace;");
+            versions.setStyle("-fx-text-fill: -theme-text-muted; -fx-font-family: 'JetBrains Mono', 'Courier New', monospace;");
             content.getChildren().add(versions);
         }
 

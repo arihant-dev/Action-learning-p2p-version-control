@@ -1,25 +1,111 @@
+/* ====================================================================
+   Axon Editorial — Swiss International Typographic Style for JavaFX
+   ==================================================================== */
+
 .root {
-    -fx-font-family: 'Inter', 'Outfit', 'Helvetica Neue', sans-serif;
+    -fx-font-family: 'Hanken Grotesk', 'Inter', 'Helvetica Neue', Arial, sans-serif;
     -fx-background-color: -theme-bg;
     -fx-text-fill: -theme-text-main;
 }
 
+/* --------------------------------------------------------------------
+   Typography
+   -------------------------------------------------------------------- */
 .label {
     -fx-text-fill: -theme-text-main;
+    -fx-font-weight: 500;
 }
 
 .title-label {
-    -fx-font-size: 20px;
-    -fx-font-weight: bold;
+    -fx-font-family: 'Hanken Grotesk', 'Helvetica Neue', Arial, sans-serif;
+    -fx-font-size: 24px;
+    -fx-font-weight: 900; /* Extra bold */
     -fx-text-fill: -theme-text-main;
-    -fx-padding: 0 0 10 0;
+    -fx-padding: 0 0 12 0;
+    -fx-letter-spacing: -0.04em;
+    -fx-text-transform: uppercase;
 }
 
 .section-label {
-    -fx-font-size: 14px;
-    -fx-font-weight: 600;
-    -fx-text-fill: -theme-text-muted;
-    -fx-padding: 5 0 5 0;
+    -fx-font-family: 'Hanken Grotesk', 'Helvetica Neue', Arial, sans-serif;
+    -fx-font-size: 13px;
+    -fx-font-weight: 800; /* Uppercase metadata styling */
+    -fx-text-fill: -theme-text-secondary;
+    -fx-padding: 6 0 6 0;
+    -fx-letter-spacing: 0.05em;
+    -fx-text-transform: uppercase;
+}
+
+/* --------------------------------------------------------------------
+   Buttons (Brutalist, Rectangular, No Shadows, Stark Hover)
+   -------------------------------------------------------------------- */
+.button {
+    -fx-background-color: -theme-bg;
+    -fx-text-fill: -theme-text-main;
+    -fx-font-weight: 700;
+    -fx-font-size: 13px;
+    -fx-padding: 8 16;
+    -fx-background-radius: 0;
+    -fx-border-radius: 0;
+    -fx-border-color: -theme-border;
+    -fx-border-width: 1px;
+    -fx-cursor: hand;
+    -fx-effect: none;
+    -fx-text-transform: uppercase;
+    -fx-letter-spacing: 0.02em;
+}
+
+.button:hover {
+    -fx-background-color: -theme-text-main;
+    -fx-text-fill: -theme-bg;
+}
+
+.button-danger {
+    -fx-background-color: -theme-danger; /* International Orange */
+    -fx-text-fill: white;
+    -fx-border-color: -theme-border;
+    -fx-border-width: 1px;
+}
+
+.button-danger:hover {
+    -fx-background-color: -theme-text-main;
+    -fx-text-fill: -theme-danger;
+}
+
+.button-icon {
+    -fx-background-color: transparent;
+    -fx-text-fill: -theme-text-main;
+    -fx-border-color: -theme-border;
+    -fx-border-width: 1px;
+    -fx-border-radius: 0;
+    -fx-background-radius: 0;
+    -fx-padding: 8 12;
+    -fx-effect: none;
+    -fx-font-weight: bold;
+}
+
+.button-icon:hover {
+    -fx-background-color: -theme-text-main;
+    -fx-text-fill: -theme-bg;
+}
+
+/* --------------------------------------------------------------------
+   Text Fields and Inputs
+   -------------------------------------------------------------------- */
+.text-field {
+    -fx-background-color: -theme-card-bg;
+    -fx-text-fill: -theme-text-secondary;
+    -fx-border-color: -theme-border;
+    -fx-border-width: 1px;
+    -fx-border-radius: 0;
+    -fx-background-radius: 0;
+    -fx-padding: 8 12;
+    -fx-font-family: 'JetBrains Mono', 'Courier New', monospace;
+    -fx-font-size: 13px;
+}
+
+.text-field:focused {
+    -fx-border-width: 2px;
 }
 
 .text-area {
@@ -28,83 +114,57 @@
     -fx-text-fill: -theme-text-secondary;
     -fx-border-color: -theme-border;
     -fx-border-width: 1px;
-    -fx-border-radius: 8px;
-    -fx-background-radius: 8px;
+    -fx-border-radius: 0;
+    -fx-background-radius: 0;
+    -fx-font-family: 'JetBrains Mono', 'Courier New', monospace;
+    -fx-font-size: 12px;
+    -fx-line-spacing: 4px;
 }
 
 .text-area .content {
     -fx-background-color: transparent;
 }
 
+/* --------------------------------------------------------------------
+   Lists and Tables (Grid lines represent the grid itself)
+   -------------------------------------------------------------------- */
 .list-view {
     -fx-background-color: -theme-card-bg;
     -fx-border-color: -theme-border;
     -fx-border-width: 1px;
-    -fx-border-radius: 8px;
-    -fx-background-radius: 8px;
-    -fx-padding: 4;
+    -fx-border-radius: 0;
+    -fx-background-radius: 0;
+    -fx-padding: 0;
 }
 
 .list-view:focused {
-    -fx-border-color: -theme-accent;
+    -fx-border-color: -theme-border;
 }
 
 .list-cell {
     -fx-background-color: transparent;
     -fx-text-fill: -theme-text-secondary;
-    -fx-padding: 10 12;
-    -fx-background-radius: 6px;
-    -fx-margin: 2 0;
+    -fx-padding: 12 16;
+    -fx-background-radius: 0;
+    -fx-border-color: -theme-border;
+    -fx-border-width: 0 0 1 0; /* Horizontal grid division lines */
+    -fx-font-size: 13px;
 }
 
 .list-cell:filled:selected,
 .list-cell:filled:selected:focused {
-    -fx-background-color: -theme-accent;
-    -fx-text-fill: white;
+    -fx-background-color: -theme-text-main;
+    -fx-text-fill: -theme-bg;
 }
 
 .list-cell:filled:hover {
-    -fx-background-color: -theme-border-hover;
-}
-
-.button {
-    -fx-background-color: -theme-accent;
-    -fx-text-fill: white;
-    -fx-font-weight: bold;
-    -fx-padding: 8 16;
-    -fx-background-radius: 8px;
-    -fx-border-radius: 8px;
-    -fx-cursor: hand;
-    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.15), 4, 0, 0, 2);
-}
-
-.button:hover {
-    -fx-background-color: -theme-accent-hover;
-}
-
-.button-danger {
-    -fx-background-color: -theme-danger;
-}
-
-.button-danger:hover {
-    -fx-background-color: derive(-theme-danger, -10%);
-}
-
-.button-icon {
-    -fx-background-color: transparent;
+    -fx-background-color: -theme-bg-secondary;
     -fx-text-fill: -theme-text-main;
-    -fx-border-color: -theme-border;
-    -fx-border-width: 1px;
-    -fx-border-radius: 8px;
-    -fx-background-radius: 8px;
-    -fx-padding: 8 12;
-    -fx-effect: none;
 }
 
-.button-icon:hover {
-    -fx-background-color: -theme-border-hover;
-}
-
+/* --------------------------------------------------------------------
+   Scroll Bars & Scroll Panes
+   -------------------------------------------------------------------- */
 .scroll-pane,
 .scroll-pane .viewport {
     -fx-background-color: transparent;
@@ -115,40 +175,25 @@
     -fx-background-color: transparent;
 }
 
-.scroll-bar:vertical .thumb {
-    -fx-background-color: -theme-border;
-    -fx-background-insets: 2, 0, 0;
-    -fx-background-radius: 2em;
-}
-
+.scroll-bar:vertical .thumb,
 .scroll-bar:horizontal .thumb {
     -fx-background-color: -theme-border;
-    -fx-background-insets: 2, 0, 0;
-    -fx-background-radius: 2em;
+    -fx-background-radius: 0;
+    -fx-background-insets: 0;
 }
 
-.text-field {
-    -fx-background-color: -theme-card-bg;
-    -fx-text-fill: -theme-text-secondary;
-    -fx-border-color: -theme-border;
-    -fx-border-width: 1px;
-    -fx-border-radius: 6px;
-    -fx-background-radius: 6px;
-    -fx-padding: 8 12;
-}
-
-.text-field:focused {
-    -fx-border-color: -theme-accent;
-}
-
+/* --------------------------------------------------------------------
+   Menu Bar & Context Menu
+   -------------------------------------------------------------------- */
 .menu-bar {
-    -fx-background-color: -theme-card-bg;
+    -fx-background-color: -theme-bg-secondary;
     -fx-border-color: -theme-border;
     -fx-border-width: 0 0 1 0;
 }
 
 .menu-bar .menu-button {
     -fx-text-fill: -theme-text-main;
+    -fx-font-weight: 700;
 }
 
 .menu-bar .menu-button:hover {
@@ -157,24 +202,62 @@
 
 .menu-item {
     -fx-text-fill: -theme-text-main;
+    -fx-font-weight: 500;
 }
 
 .context-menu {
     -fx-background-color: -theme-card-bg;
     -fx-border-color: -theme-border;
+    -fx-background-radius: 0;
+    -fx-border-radius: 0;
 }
 
+/* --------------------------------------------------------------------
+   Status Bar & Miscellaneous
+   -------------------------------------------------------------------- */
 .status-bar-label {
     -fx-padding: 8 12 8 12;
     -fx-text-fill: -theme-text-muted;
+    -fx-font-weight: bold;
+    -fx-font-size: 11px;
+    -fx-letter-spacing: 0.05em;
+    -fx-text-transform: uppercase;
 }
 
 .status-online {
-    -fx-text-fill: -theme-success;
-    -fx-font-weight: bold;
+    -fx-text-fill: -theme-text-main;
+    -fx-font-weight: 900;
+    -fx-text-transform: uppercase;
 }
 
 .status-offline {
-    -fx-text-fill: -theme-danger;
+    -fx-text-fill: -theme-danger; /* International Orange for alert */
+    -fx-font-weight: 900;
+    -fx-text-transform: uppercase;
+}
+
+/* Tab Pane Styling for Brutalist look */
+.tab-pane .tab-header-area {
+    -fx-padding: 0;
+}
+
+.tab-pane .tab-header-background {
+    -fx-background-color: -theme-bg-secondary;
+    -fx-border-color: -theme-border;
+    -fx-border-width: 0 0 1 0;
+}
+
+.tab {
+    -fx-background-color: -theme-bg;
+    -fx-background-radius: 0;
+    -fx-border-color: -theme-border;
+    -fx-border-width: 1 1 0 1;
+    -fx-padding: 6 12;
+    -fx-text-fill: -theme-text-muted;
+}
+
+.tab:selected {
+    -fx-background-color: -theme-card-bg;
+    -fx-text-fill: -theme-text-main;
     -fx-font-weight: bold;
 }

@@ -63,7 +63,9 @@ public class RepositoryListController {
                 getClass().getResource("styles.css").toExternalForm(),
                 getClass().getResource(savedTheme + ".css").toExternalForm()
         );
-        themeToggleButton.setText(isDarkMode ? "lightmode" : "darkmode");
+        if (themeToggleButton != null) {
+            themeToggleButton.setText(isDarkMode ? "lightmode" : "darkmode");
+        }
     }
 
     public void shutdown() {
@@ -106,11 +108,15 @@ public class RepositoryListController {
 
         if (isDarkMode) {
             rootContainer.getStylesheets().add(getClass().getResource("light.css").toExternalForm());
-            themeToggleButton.setText("darkmode");
+            if (themeToggleButton != null) {
+                themeToggleButton.setText("darkmode");
+            }
             isDarkMode = false;
         } else {
             rootContainer.getStylesheets().add(getClass().getResource("dark.css").toExternalForm());
-            themeToggleButton.setText("lightmode");
+            if (themeToggleButton != null) {
+                themeToggleButton.setText("lightmode");
+            }
             isDarkMode = true;
         }
     }
