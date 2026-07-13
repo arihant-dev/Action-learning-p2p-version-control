@@ -222,20 +222,20 @@ func main() {
 	defer coord.Stop()
 
 	// Hook up connection lifecycle events to notify C++
-	connMgr.OnConnected = func(peerID string) {
+	connMgr.SetOnConnected(func(peerID string) {
 		if err := sendPeerList(peerRegistry, connMgr, ipcServer); err != nil {
 			log.Printf("Failed to update peer list: %v\n", err)
 		}
 		coord.SyncAllRepositoriesWithPeer(peerID)
-	}
-	connMgr.OnDisconnected = func(peerID string) {
+	})
+	connMgr.SetOnDisconnected(func(peerID string) {
 		if err := sendPeerList(peerRegistry, connMgr, ipcServer); err != nil {
 			log.Printf("Failed to update peer list: %v\n", err)
 		}
-	}
+	})
 
 	// Hook up incoming P2P message forwards
-	connMgr.OnMessage = func(peerID string, msg *ipc.Message) {
+	connMgr.SetOnMessage(func(peerID string, msg *ipc.Message) {
 		log.Printf("Received P2P message from peer %s: %s\n", peerID, msg.Type)
 		
 		// Let the coordinator process sync-related network messages first
@@ -248,7 +248,7 @@ func main() {
 
 		// Forward any other messages to C++ daemon over IPC
 		ipcServer.SendMessage(msg)
-	}
+	})
 
 	// Handle IPC messages from C++ daemon
 	ipcServer.OnMessage = func(msg *ipc.Message) error {
