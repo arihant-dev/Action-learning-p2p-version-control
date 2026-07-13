@@ -20,6 +20,8 @@ import (
 	"p2p/pkg/protocol"
 	"p2p/pkg/storage/sqlite"
 	"p2p/pkg/sync"
+
+	"github.com/grandcat/zeroconf"
 )
 
 var pidFilePath = "/tmp/p2p_sync.pid"
@@ -167,17 +169,33 @@ func main() {
 		}
 	}
 
-	// Start peer discovery
-	mdnsServer, err := peerRegistry.StartDiscovery(localPeerID, p2pPort)
-	if err != nil {
-		log.Printf("[Main] Failed to start peer discovery: %v\n", err)
-		removePIDFile()
-		os.Exit(1)
+	// Start peer discovery (mDNS). Can be disabled via P2P_DISABLE_MDNS for
+	// tests/environments that need deterministic, manually-controlled
+	// topologies (e.g. chain-replication integration tests using
+	// PEER_ADDRESSES only, without mDNS auto-discovery connecting peers
+	// directly to each other).
+	disableMDNS := false
+	if envDisable := os.Getenv("P2P_DISABLE_MDNS"); envDisable == "1" || strings.EqualFold(envDisable, "true") {
+		disableMDNS = true
+	}
+
+	var mdnsServer *zeroconf.Server
+	if !disableMDNS {
+		mdnsServer, err = peerRegistry.StartDiscovery(localPeerID, p2pPort)
+		if err != nil {
+			log.Printf("[Main] Failed to start peer discovery: %v\n", err)
+			removePIDFile()
+			os.Exit(1)
+		}
+	} else {
+		log.Printf("[Main] mDNS discovery disabled via P2P_DISABLE_MDNS\n")
 	}
 	defer func() {
-		peerRegistry.StopDiscovery()
-		if mdnsServer != nil {
-			mdnsServer.Shutdown()
+		if !disableMDNS {
+			peerRegistry.StopDiscovery()
+			if mdnsServer != nil {
+				mdnsServer.Shutdown()
+			}
 		}
 	}()
 

@@ -47,6 +47,17 @@ set_target_properties(p2p_daemon PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
+# AddressSanitizer + UndefinedBehaviorSanitizer, off by default so normal
+# (release/dev) builds are unaffected. Not supported by MSVC's toolchain here.
+option(ENABLE_SANITIZERS "Build with AddressSanitizer + UBSan" OFF)
+if(ENABLE_SANITIZERS AND NOT MSVC)
+    set(P2P_SANITIZER_FLAGS -fsanitize=address,undefined -fno-omit-frame-pointer)
+    target_compile_options(p2p_daemon PRIVATE ${P2P_SANITIZER_FLAGS})
+    target_link_options(p2p_daemon PRIVATE ${P2P_SANITIZER_FLAGS})
+elseif(ENABLE_SANITIZERS AND MSVC)
+    message(WARNING "ENABLE_SANITIZERS is not supported with MSVC; ignoring.")
+endif()
+
 option(BUILD_TESTS "Build tests" OFF)
 if(BUILD_TESTS)
     enable_testing()

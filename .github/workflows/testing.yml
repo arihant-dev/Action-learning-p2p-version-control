@@ -19,6 +19,10 @@ on:
       - industry-shipping
       - ws/**
 
+concurrency:
+  group: testing-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   go-test:
     strategy:
@@ -42,7 +46,71 @@ jobs:
 
       - run: go build ./...
 
-      - run: go clean -testcache && go test ./... -count=1 -short
+      - run: go vet ./...
+
+      # -short is intentionally NOT set here so stress/rapid (property-based)
+      # tests run in CI as well as locally.
+      - run: go test ./... -race -count=1 -timeout 300s -covermode=atomic -coverprofile=coverage.out
+
+      - run: go tool cover -func=coverage.out | tail -1
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: go-coverage-${{ matrix.os }}
+          path: src/backend/go/coverage.out
+
+  go-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache: true
+
+      # golangci-lint-action pins its own golangci-lint version (v1.60.1),
+      # which may not yet officially support very new Go toolchains
+      # (the repo's go.mod / CI Go setup can be ahead of what the linter's
+      # release supports). We keep this job informative rather than
+      # blocking (continue-on-error: true) so lint feedback is still
+      # surfaced in the PR without failing the whole pipeline when the
+      # linter itself trips over toolchain-version skew.
+      - uses: golangci/golangci-lint-action@v6
+        continue-on-error: true
+        with:
+          version: v1.60.1
+          working-directory: src/backend/go
+          args: --config=../../../.golangci.yml
+
+  go-fuzz-smoke:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/backend/go
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache: true
+
+      # Bounded smoke-fuzz of each existing Fuzz target so regressions are
+      # caught early without running full-length fuzzing campaigns in CI.
+      - name: Fuzz pkg/ipc (FuzzReadMessage)
+        run: go test ./pkg/ipc/ -run=^$ -fuzz=FuzzReadMessage -fuzztime=15s
+
+      - name: Fuzz pkg/protocol (FuzzParseMessage)
+        run: go test ./pkg/protocol/ -run=^$ -fuzz=FuzzParseMessage -fuzztime=15s
+
+      - name: Fuzz pkg/protocol (FuzzFileChangedPayload)
+        run: go test ./pkg/protocol/ -run=^$ -fuzz=FuzzFileChangedPayload -fuzztime=15s
+
+      - name: Fuzz pkg/protocol (FuzzMetadataExchangePayload)
+        run: go test ./pkg/protocol/ -run=^$ -fuzz=FuzzMetadataExchangePayload -fuzztime=15s
 
   cpp-build-test:
     strategy:
@@ -67,14 +135,34 @@ jobs:
       - name: cmake-build
         working-directory: src/backend/cpp
         run: |
-          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON
           cmake --build build --parallel
 
       - name: run-cmake-tests
         working-directory: src/backend/cpp
         run: ctest --test-dir build --output-on-failure
 
-  java-build:
+  cpp-sanitizers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: jwlawson/actions-setup-cmake@v2
+
+      - name: Install OpenSSL
+        run: sudo apt-get install -y libssl-dev
+
+      - name: cmake-build (ASan + UBSan)
+        working-directory: src/backend/cpp
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON -DENABLE_SANITIZERS=ON
+          cmake --build build --parallel
+
+      - name: run-sanitized-tests
+        working-directory: src/backend/cpp
+        run: ctest --test-dir build --output-on-failure
+
+  java-test:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
@@ -91,4 +179,14 @@ jobs:
           java-version: 21
           cache: maven
 
-      - run: ./mvnw compile --no-transfer-progress
+      - run: ./mvnw test --no-transfer-progress
+
+      - name: Upload test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: java-test-reports-${{ matrix.os }}
+          path: |
+            target/surefire-reports/**
+            **/hs_err_pid*
+          if-no-files-found: ignore

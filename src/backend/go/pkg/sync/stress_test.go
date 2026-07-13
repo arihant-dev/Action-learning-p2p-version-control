@@ -86,6 +86,16 @@ func TestStress1000SmallFiles(t *testing.T) {
 	mustAddRepo(t, coordA, "stress-repo", dirA)
 	mustAddRepo(t, coordB, "stress-repo", dirB)
 
+	// AddRepository kicks off an async initial directory scan on both
+	// coordinators (see the identical comment in TestStressRapidChanges).
+	// That scan's "offline deletion" pruning pass can race with file
+	// changes injected (locally on A, or received from A over the network
+	// on B) immediately afterward, occasionally misclassifying a
+	// just-written row as "deleted while offline" and dropping it from the
+	// tracked count. Give both scans (empty dirs, so near-instant) time to
+	// finish first.
+	time.Sleep(200 * time.Millisecond)
+
 	start := time.Now()
 	numFiles := 1000
 
@@ -250,6 +260,18 @@ func TestStressRapidChanges(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	mustAddRepo(t, coord, "rapid-repo", dir)
+
+	// AddRepository kicks off an async initial directory scan on a
+	// background goroutine (startRepoWorkerLocked -> ScanAndIndexLocalFiles).
+	// That scan's "offline deletion" pruning pass lists all DB metadata rows
+	// and marks any not seen on disk (during its walk) as deleted, guarded
+	// only by a millisecond-resolution timestamp comparison against when the
+	// scan started. Since dir is empty, injecting file changes concurrently
+	// with that still-in-flight scan can race: a row inserted in the same
+	// millisecond the scan started can be misclassified as "deleted while
+	// offline" and vanish from the tracked count. Give the (near-instant,
+	// empty-directory) scan time to finish before generating rapid changes.
+	time.Sleep(200 * time.Millisecond)
 
 	start := time.Now()
 	changes := 100

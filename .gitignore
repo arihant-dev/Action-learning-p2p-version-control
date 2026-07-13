@@ -2,6 +2,7 @@
 .DS_Store
 Thumbs.db
 .idea/
+.cache/
 
 # Agentic coding artifacts (keep team commits clean)
 .copilot/
