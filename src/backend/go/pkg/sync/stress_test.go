@@ -200,12 +200,10 @@ func TestStressConcurrentTransfers(t *testing.T) {
 				return
 			}
 
-			session, exists := ft.GetSession(fmt.Sprintf("dl_%d", idx))
-			if !exists {
+			if _, exists := ft.GetSession(fmt.Sprintf("dl_%d", idx)); !exists {
 				errChan <- fmt.Errorf("session %d not found", idx)
 				return
 			}
-			_ = session
 		}(i)
 	}
 
