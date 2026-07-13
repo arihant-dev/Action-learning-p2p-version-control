@@ -339,7 +339,13 @@ jobs:
       - name: Generate checksums
         run: |
           rm -f SHA256SUMS SHA256SUMS.asc
-          shasum -a 256 * > SHA256SUMS
+          shopt -s nullglob
+          files=( *.zip *.tar.gz *.msi p2p-sync-sbom.cdx.json )
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No release artifacts found to checksum" >&2
+            exit 1
+          fi
+          shasum -a 256 "${files[@]}" > SHA256SUMS
           cat SHA256SUMS
 
       - name: Check for GPG signing secret
@@ -364,13 +370,21 @@ jobs:
         id: create_release
         run: |
           VERSION="${{ env.VERSION }}"
-          RELEASE_FILES=(*.zip *.tar.gz *.msi p2p-sync-sbom.cdx.json SHA256SUMS)
+          shopt -s nullglob
+          RELEASE_FILES=( *.zip *.tar.gz *.msi p2p-sync-sbom.cdx.json SHA256SUMS )
           if [ -f SHA256SUMS.asc ]; then
             RELEASE_FILES+=(SHA256SUMS.asc)
           fi
-          gh release create "$VERSION" \
-            --title "$VERSION" \
-            --generate-notes \
-            "${RELEASE_FILES[@]}"
+          # Idempotent: if the release already exists (re-run, or the SBOM
+          # action pre-created it), upload/clobber assets onto it; otherwise
+          # create it fresh. Lets a fixed re-run complete a partial release.
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            gh release upload "$VERSION" "${RELEASE_FILES[@]}" --clobber
+          else
+            gh release create "$VERSION" \
+              --title "$VERSION" \
+              --generate-notes \
+              "${RELEASE_FILES[@]}"
+          fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
