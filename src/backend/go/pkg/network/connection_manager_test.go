@@ -30,14 +30,14 @@ func TestConnectionManagerHandshakeAndServer(t *testing.T) {
 	cmA.mu.RUnlock()
 
 	connectedA := make(chan string, 1)
-	cmA.OnConnected = func(peerID string) {
+	cmA.SetOnConnected(func(peerID string) {
 		connectedA <- peerID
-	}
+	})
 
 	connectedB := make(chan string, 1)
-	cmB.OnConnected = func(peerID string) {
+	cmB.SetOnConnected(func(peerID string) {
 		connectedB <- peerID
-	}
+	})
 
 	// Dial B to A
 	err = cmB.Connect("peer-a", "127.0.0.1", addr.Port)
@@ -89,9 +89,9 @@ func TestBroadcast(t *testing.T) {
 	cmReceiver.mu.RUnlock()
 
 	connectedChan := make(chan bool, 1)
-	cmReceiver.OnConnected = func(peerID string) {
+	cmReceiver.SetOnConnected(func(peerID string) {
 		connectedChan <- true
-	}
+	})
 
 	err = cmSender.Connect("receiver", "127.0.0.1", addr.Port)
 	if err != nil {
@@ -102,11 +102,11 @@ func TestBroadcast(t *testing.T) {
 
 	// Register OnMessage listener on receiver
 	receivedMsgChan := make(chan *ipc.Message, 1)
-	cmReceiver.OnMessage = func(peerID string, msg *ipc.Message) {
+	cmReceiver.SetOnMessage(func(peerID string, msg *ipc.Message) {
 		if peerID == "sender" {
 			receivedMsgChan <- msg
 		}
-	}
+	})
 
 	// Wait a tiny moment for registries to finalize
 	time.Sleep(100 * time.Millisecond)
@@ -153,9 +153,9 @@ func TestHeartbeatTimeout(t *testing.T) {
 	port := listener.Addr().(*net.TCPAddr).Port
 
 	disconnectedChan := make(chan string, 1)
-	cmA.OnDisconnected = func(peerID string) {
+	cmA.SetOnDisconnected(func(peerID string) {
 		disconnectedChan <- peerID
-	}
+	})
 
 	go func() {
 		conn, err := listener.Accept()
@@ -232,9 +232,9 @@ func TestAutoReconnect(t *testing.T) {
 	defer cmB.Stop()
 
 	connectedChan := make(chan string, 2)
-	cmB.OnConnected = func(peerID string) {
+	cmB.SetOnConnected(func(peerID string) {
 		connectedChan <- peerID
-	}
+	})
 
 	err = cmB.Connect("peer-a", "127.0.0.1", addr.Port)
 	if err != nil {
@@ -253,14 +253,14 @@ func TestAutoReconnect(t *testing.T) {
 
 	// Set disconnect listener BEFORE stopping Server A to avoid missing the signal
 	disconnected := make(chan struct{}, 1)
-	cmB.OnDisconnected = func(peerID string) {
+	cmB.SetOnDisconnected(func(peerID string) {
 		if peerID == "peer-a" {
 			select {
 			case disconnected <- struct{}{}:
 			default:
 			}
 		}
-	}
+	})
 
 	// Disconnect Server A
 	cmA.Stop()

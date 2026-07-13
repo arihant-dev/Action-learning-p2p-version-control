@@ -1,4 +1,4 @@
-module org.codehaus.mojo.frontendtest {
+module io.p2pvcs.app {
     requires javafx.controls;
     requires javafx.fxml;
 
@@ -7,6 +7,6 @@ module org.codehaus.mojo.frontendtest {
     requires javafx.graphics;
     requires com.google.gson;
 
-    opens org.codehaus.mojo.frontendtest to javafx.fxml, com.google.gson;
-    exports org.codehaus.mojo.frontendtest;
+    opens io.p2pvcs.app to javafx.fxml, com.google.gson;
+    exports io.p2pvcs.app;
 }

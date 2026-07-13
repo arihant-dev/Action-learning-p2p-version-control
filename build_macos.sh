@@ -78,18 +78,31 @@ jpackage \
     --name "$APP_NAME" \
     --app-version "$VERSION" \
     --runtime-image target/app \
-    --module org.codehaus.mojo.frontendtest/org.codehaus.mojo.frontendtest.HelloApplication \
+    --module io.p2pvcs.app/io.p2pvcs.app.P2PApplication \
     --dest "$TMP_BUILD_DIR" \
     --verbose
 
 mkdir -p target/bundle
 cp -R "$TMP_BUILD_DIR/$APP_NAME.app" target/bundle/
 
-echo "--> 6. Creating distribution archive..."
+echo "--> 6. Codesigning (optional)..."
+if [ -n "${MACOS_SIGN_IDENTITY:-}" ]; then
+    echo "    MACOS_SIGN_IDENTITY is set - codesigning target/bundle/$APP_NAME.app"
+    codesign --deep --force --options runtime --timestamp \
+        --sign "$MACOS_SIGN_IDENTITY" \
+        "target/bundle/$APP_NAME.app" || echo "    Warning: codesign failed, continuing with unsigned bundle"
+else
+    echo "    MACOS_SIGN_IDENTITY not set - build will be unsigned"
+fi
+
+echo "--> 7. Creating distribution archive..."
 (
     cd target/bundle
     zip -r "../${APP_NAME}-${VERSION}-macos-${ARCH}.zip" "$APP_NAME.app"
 )
+
+echo "--> 8. Computing checksum..."
+shasum -a 256 "target/${APP_NAME}-${VERSION}-macos-${ARCH}.zip"
 
 echo "===================================================="
 echo " Build Success!"

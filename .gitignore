@@ -2,6 +2,7 @@
 .DS_Store
 Thumbs.db
 .idea/
+.cache/
 
 # Agentic coding artifacts (keep team commits clean)
 .copilot/
@@ -17,6 +18,10 @@ Thumbs.db
 .openhands/
 .vscode/copilot*
 .vscode/*.code-snippets
+
+# Python
+__pycache__/
+*.py[cod]
 
 # Logs/temp
 *.log

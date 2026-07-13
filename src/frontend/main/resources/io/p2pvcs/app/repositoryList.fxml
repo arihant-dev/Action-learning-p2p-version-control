@@ -5,7 +5,7 @@
 
 <?import javafx.geometry.Insets?>
 <VBox fx:id="rootContainer" alignment="CENTER" spacing="15.0" xmlns:fx="http://javafx.com/fxml"
-      fx:controller="org.codehaus.mojo.frontendtest.RepositoryListController"
+      fx:controller="io.p2pvcs.app.RepositoryListController"
       styleClass="root">
     <padding>
         <Insets topRightBottomLeft="20"/>

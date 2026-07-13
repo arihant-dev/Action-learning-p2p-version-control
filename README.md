@@ -137,4 +137,8 @@ This project follows [Semantic Versioning](https://semver.org/). Releases are bu
 
 ## License
 
-MIT
+This project is licensed under the [MIT License](LICENSE).
+
+## Code of Conduct
+
+Participation in this project is governed by our [Code of Conduct](CODE_OF_CONDUCT.md).

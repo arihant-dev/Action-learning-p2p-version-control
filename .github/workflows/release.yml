@@ -57,6 +57,88 @@ jobs:
           fi
           echo "arch=$ARCH" >> "$GITHUB_OUTPUT"
 
+      - name: Check for macOS signing secret
+        run: |
+          if [ -n "${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}" ]; then
+            echo "HAS_MACOS_SIGN=true" >> "$GITHUB_ENV"
+          else
+            echo "HAS_MACOS_SIGN=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Import signing certificate
+        if: env.HAS_MACOS_SIGN == 'true'
+        env:
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PWD=$(openssl rand -base64 24)
+          CERT_PATH="$RUNNER_TEMP/certificate.p12"
+
+          echo "$MACOS_CERTIFICATE_P12_BASE64" | base64 --decode > "$CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PWD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PWD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -k "$KEYCHAIN_PATH" -P "$MACOS_CERTIFICATE_PWD" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PWD" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed 's/"//g')
+
+          rm -f "$CERT_PATH"
+
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+      - name: Codesign app bundle
+        if: env.HAS_MACOS_SIGN == 'true'
+        env:
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+        run: |
+          codesign --deep --force --options runtime --timestamp \
+            --sign "$MACOS_SIGN_IDENTITY" \
+            "target/bundle/P2PVersionControl.app"
+          codesign --verify --deep --strict --verbose=2 "target/bundle/P2PVersionControl.app"
+
+      - name: Notarize app bundle
+        if: env.HAS_MACOS_SIGN == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          NOTARIZE_ZIP="$RUNNER_TEMP/P2PVersionControl-notarize.zip"
+          (cd target/bundle && ditto -c -k --keepParent "P2PVersionControl.app" "$NOTARIZE_ZIP")
+
+          xcrun notarytool submit "$NOTARIZE_ZIP" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+
+          rm -f "$NOTARIZE_ZIP"
+
+      - name: Staple notarization ticket
+        if: env.HAS_MACOS_SIGN == 'true'
+        run: |
+          xcrun stapler staple "target/bundle/P2PVersionControl.app"
+
+      - name: Clean up temporary keychain
+        if: always() && env.HAS_MACOS_SIGN == 'true'
+        run: |
+          if [ -n "${KEYCHAIN_PATH:-}" ]; then
+            security delete-keychain "$KEYCHAIN_PATH" || true
+          fi
+
+      - name: Re-archive signed app bundle
+        if: env.HAS_MACOS_SIGN == 'true'
+        run: |
+          VER="${{ env.VERSION }}"
+          VER="${VER#v}"
+          rm -f "target/P2PVersionControl-${VER}-macos-${{ steps.arch.outputs.arch }}.zip"
+          (
+            cd target/bundle
+            zip -r "../P2PVersionControl-${VER}-macos-${{ steps.arch.outputs.arch }}.zip" "P2PVersionControl.app"
+          )
+
       - uses: actions/upload-artifact@v4
         with:
           name: P2PVersionControl-macos-${{ steps.arch.outputs.arch }}
@@ -166,7 +248,7 @@ jobs:
             --name "$appName" `
             --app-version "$ver" `
             --runtime-image target\app `
-            --module org.codehaus.mojo.frontendtest/org.codehaus.mojo.frontendtest.HelloApplication `
+            --module io.p2pvcs.app/io.p2pvcs.app.P2PApplication `
             --dest target\bundle `
             --verbose
 
@@ -193,6 +275,39 @@ jobs:
             --app-version "$ver" `
             --dest target `
             --verbose
+
+      - name: Check for Windows signing secret
+        shell: bash
+        run: |
+          if [ -n "${{ secrets.WINDOWS_CERT_PFX_BASE64 }}" ]; then
+            echo "HAS_WINDOWS_SIGN=true" >> "$GITHUB_ENV"
+          else
+            echo "HAS_WINDOWS_SIGN=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Sign Windows MSI
+        if: env.HAS_WINDOWS_SIGN == 'true'
+        env:
+          WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          WINDOWS_CERT_PWD: ${{ secrets.WINDOWS_CERT_PWD }}
+        run: |
+          $pfxPath = Join-Path $env:RUNNER_TEMP "codesign.pfx"
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:WINDOWS_CERT_PFX_BASE64))
+
+          $msi = Get-ChildItem -Path "target" -Filter "P2PVersionControl-*.msi" | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $msi) {
+            throw "No MSI found to sign"
+          }
+
+          $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse |
+            Where-Object { $_.FullName -match "x64" } | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $signtool) {
+            $signtool = "signtool.exe"
+          }
+
+          & $signtool sign /f "$pfxPath" /p "$env:WINDOWS_CERT_PWD" /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 "$msi"
+
+          Remove-Item -Force $pfxPath
 
       - uses: actions/upload-artifact@v4
         with:
@@ -221,16 +336,41 @@ jobs:
           format: cyclonedx-json
           output-file: p2p-sync-sbom.cdx.json
 
+      - name: Generate checksums
+        run: |
+          rm -f SHA256SUMS SHA256SUMS.asc
+          shasum -a 256 * > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Check for GPG signing secret
+        run: |
+          if [ -n "${{ secrets.GPG_PRIVATE_KEY }}" ]; then
+            echo "HAS_GPG_SIGN=true" >> "$GITHUB_ENV"
+          else
+            echo "HAS_GPG_SIGN=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Sign checksums with GPG
+        if: env.HAS_GPG_SIGN == 'true'
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
+            --armor --detach-sign --output SHA256SUMS.asc SHA256SUMS
+
       - name: Create GitHub Release
         id: create_release
         run: |
           VERSION="${{ env.VERSION }}"
+          RELEASE_FILES=(*.zip *.tar.gz *.msi p2p-sync-sbom.cdx.json SHA256SUMS)
+          if [ -f SHA256SUMS.asc ]; then
+            RELEASE_FILES+=(SHA256SUMS.asc)
+          fi
           gh release create "$VERSION" \
             --title "$VERSION" \
             --generate-notes \
-            *.zip \
-            *.tar.gz \
-            *.msi \
-            p2p-sync-sbom.cdx.json
+            "${RELEASE_FILES[@]}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

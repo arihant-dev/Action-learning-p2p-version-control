@@ -216,6 +216,10 @@ func ReadMessage(conn net.Conn) (*Message, error) {
 		return nil, err
 	}
 
+	if msg.Type == "" {
+		return nil, fmt.Errorf("invalid message: missing type")
+	}
+
 	return &msg, nil
 }
 

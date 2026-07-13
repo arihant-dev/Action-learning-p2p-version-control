@@ -7,8 +7,9 @@ for contributing to the project.
 
 ## Code of Conduct
 
-This project is committed to providing a welcoming and inclusive experience for everyone.
-We expect all contributors to:
+This project adheres to the [Contributor Covenant](CODE_OF_CONDUCT.md) Code of Conduct.
+By participating, you are expected to uphold it; please report unacceptable behavior as
+described there. In short, we expect all contributors to:
 
 - Be respectful and considerate in all interactions
 - Accept constructive criticism gracefully

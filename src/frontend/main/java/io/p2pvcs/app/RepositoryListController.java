@@ -1,4 +1,4 @@
-package org.codehaus.mojo.frontendtest;
+package io.p2pvcs.app;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -133,12 +133,12 @@ public class RepositoryListController {
         if (selected == null) return;
 
         try {
-            FXMLLoader fxmlLoader = new FXMLLoader(HelloApplication.class.getResource("RepoStatusView.fxml"));
+            FXMLLoader fxmlLoader = new FXMLLoader(P2PApplication.class.getResource("RepoStatusView.fxml"));
             Scene scene = new Scene(fxmlLoader.load(), 600, 450);
 
             String activeThemeFile = isDarkMode ? "dark.css" : "light.css";
             scene.getStylesheets().addAll(
-                    HelloApplication.class.getResource("styles.css").toExternalForm(),
+                    P2PApplication.class.getResource("styles.css").toExternalForm(),
                     getClass().getResource(activeThemeFile).toExternalForm()
             );
 
@@ -190,7 +190,7 @@ public class RepositoryListController {
 
         String activeThemeFile = isDarkMode ? "dark.css" : "light.css";
         dialog.getDialogPane().getStylesheets().addAll(
-                HelloApplication.class.getResource("styles.css").toExternalForm(),
+                P2PApplication.class.getResource("styles.css").toExternalForm(),
                 getClass().getResource(activeThemeFile).toExternalForm()
         );
         dialog.getDialogPane().getStyleClass().add("root");

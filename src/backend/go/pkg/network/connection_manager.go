@@ -47,9 +47,36 @@ type ConnectionManager struct {
 	stopChan chan struct{}
 	wg       sync.WaitGroup
 
+	// cbMu guards OnConnected, OnDisconnected, and OnMessage. These fields are
+	// read from goroutines (readLoop, handleIncomingConnection, etc.) and may be
+	// assigned after those goroutines are already running, so all reads and
+	// writes must go through this mutex (writes via the Set* methods below).
+	cbMu sync.RWMutex
+
 	OnConnected    func(peerID string)
 	OnDisconnected func(peerID string)
 	OnMessage      func(peerID string, msg *ipc.Message)
+}
+
+// SetOnConnected sets the OnConnected callback in a thread-safe manner.
+func (cm *ConnectionManager) SetOnConnected(fn func(peerID string)) {
+	cm.cbMu.Lock()
+	defer cm.cbMu.Unlock()
+	cm.OnConnected = fn
+}
+
+// SetOnDisconnected sets the OnDisconnected callback in a thread-safe manner.
+func (cm *ConnectionManager) SetOnDisconnected(fn func(peerID string)) {
+	cm.cbMu.Lock()
+	defer cm.cbMu.Unlock()
+	cm.OnDisconnected = fn
+}
+
+// SetOnMessage sets the OnMessage callback in a thread-safe manner.
+func (cm *ConnectionManager) SetOnMessage(fn func(peerID string, msg *ipc.Message)) {
+	cm.cbMu.Lock()
+	defer cm.cbMu.Unlock()
+	cm.OnMessage = fn
 }
 
 func NewConnectionManager(localPeerID string) *ConnectionManager {
@@ -175,8 +202,11 @@ func (cm *ConnectionManager) handleIncomingConnection(conn net.Conn) {
 
 	log.Printf("Accepted peer connection from: %s (%s)\n", peerID, conn.RemoteAddr())
 
-	if cm.OnConnected != nil {
-		go cm.OnConnected(peerID)
+	cm.cbMu.RLock()
+	onConnected := cm.OnConnected
+	cm.cbMu.RUnlock()
+	if onConnected != nil {
+		go onConnected(peerID)
 	}
 
 	// 4. Start active reader loop
@@ -267,8 +297,11 @@ func (cm *ConnectionManager) Connect(peerID, address string, port int) error {
 
 	log.Printf("Successfully established P2P connection to: %s (%s)\n", peerID, addr)
 
-	if cm.OnConnected != nil {
-		go cm.OnConnected(peerID)
+	cm.cbMu.RLock()
+	onConnected := cm.OnConnected
+	cm.cbMu.RUnlock()
+	if onConnected != nil {
+		go onConnected(peerID)
 	}
 
 	// 4. Start active reader loop
@@ -315,8 +348,11 @@ func (cm *ConnectionManager) readLoop(peerID string, conn net.Conn) {
 			continue
 		}
 
-		if cm.OnMessage != nil {
-			cm.OnMessage(peerID, msg)
+		cm.cbMu.RLock()
+		onMessage := cm.OnMessage
+		cm.cbMu.RUnlock()
+		if onMessage != nil {
+			onMessage(peerID, msg)
 		}
 	}
 }
@@ -339,8 +375,11 @@ func (cm *ConnectionManager) CloseConnection(peerID string) {
 		delete(cm.lastSeen, peerID)
 		log.Printf("Disconnected from peer: %s\n", peerID)
 
-		if cm.OnDisconnected != nil {
-			go cm.OnDisconnected(peerID)
+		cm.cbMu.RLock()
+		onDisconnected := cm.OnDisconnected
+		cm.cbMu.RUnlock()
+		if onDisconnected != nil {
+			go onDisconnected(peerID)
 		}
 	}
 }
@@ -360,8 +399,11 @@ func (cm *ConnectionManager) closeConnectionIfMatch(peerID string, conn net.Conn
 		delete(cm.lastSeen, peerID)
 		log.Printf("Disconnected from peer: %s\n", peerID)
 
-		if cm.OnDisconnected != nil {
-			go cm.OnDisconnected(peerID)
+		cm.cbMu.RLock()
+		onDisconnected := cm.OnDisconnected
+		cm.cbMu.RUnlock()
+		if onDisconnected != nil {
+			go onDisconnected(peerID)
 		}
 	}
 }
