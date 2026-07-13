@@ -1,4 +1,4 @@
-package org.codehaus.mojo.frontendtest;
+package io.p2pvcs.app;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -163,9 +163,9 @@ public class SettingsDialog {
 
         Scene scene = new Scene(root, 420, 320);
         try {
-            scene.getStylesheets().add(HelloApplication.class.getResource("styles.css").toExternalForm());
+            scene.getStylesheets().add(P2PApplication.class.getResource("styles.css").toExternalForm());
             String activeTheme = getSetting("theme", "dark");
-            scene.getStylesheets().add(HelloApplication.class.getResource(activeTheme + ".css").toExternalForm());
+            scene.getStylesheets().add(P2PApplication.class.getResource(activeTheme + ".css").toExternalForm());
         } catch (Exception e) {
             System.err.println("Failed to load stylesheet: " + e.getMessage());
         }
@@ -195,6 +195,6 @@ public class SettingsDialog {
     public static void applyTheme(Scene scene) {
         String theme = getSetting("theme", "dark");
         scene.getStylesheets().removeIf(s -> s.contains("dark.css") || s.contains("light.css"));
-        scene.getStylesheets().add(HelloApplication.class.getResource(theme + ".css").toExternalForm());
+        scene.getStylesheets().add(P2PApplication.class.getResource(theme + ".css").toExternalForm());
     }
 }

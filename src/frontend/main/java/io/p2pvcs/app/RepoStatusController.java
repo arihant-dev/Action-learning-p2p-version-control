@@ -1,4 +1,4 @@
-package org.codehaus.mojo.frontendtest;
+package io.p2pvcs.app;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -245,7 +245,7 @@ public class RepoStatusController {
 
         try {
             dialog.getDialogPane().getStylesheets().addAll(
-                HelloApplication.class.getResource("styles.css").toExternalForm()
+                P2PApplication.class.getResource("styles.css").toExternalForm()
             );
             dialog.getDialogPane().getStyleClass().add("root");
         } catch (Exception ignored) {}

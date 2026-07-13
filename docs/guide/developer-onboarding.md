@@ -43,9 +43,9 @@ in under an hour.
 │   │           └── file_transfer.cpp          # Socket file upload/download
 │   └── frontend/
 │       ├── main/
-│       │   ├── java/org/codehaus/mojo/frontendtest/
+│       │   ├── java/io/p2pvcs/app/
 │       │   │   ├── Launcher.java             # Entry point
-│       │   │   ├── HelloApplication.java   # JavaFX lifecycle
+│       │   │   ├── P2PApplication.java   # JavaFX lifecycle
 │       │   │   ├── IpcBridge.java           # IPC client + Go process mgmt
 │       │   │   ├── HelloController.java     # Main controller
 │       │   │   ├── RepositoryListController.java

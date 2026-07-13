@@ -1,4 +1,4 @@
-package org.codehaus.mojo.frontendtest;
+package io.p2pvcs.app;
 
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -13,7 +13,7 @@ import javafx.stage.Stage;
 
 import java.io.IOException;
 
-public class HelloApplication extends Application {
+public class P2PApplication extends Application {
     @Override
     public void start(Stage stage) throws IOException {
         StackPane splash = new StackPane();
@@ -36,8 +36,8 @@ public class HelloApplication extends Application {
         splash.getChildren().add(splashContent);
 
         Scene splashScene = new Scene(splash, 360, 550);
-        splashScene.getStylesheets().add(HelloApplication.class.getResource("styles.css").toExternalForm());
-        splashScene.getStylesheets().add(HelloApplication.class.getResource("dark.css").toExternalForm());
+        splashScene.getStylesheets().add(P2PApplication.class.getResource("styles.css").toExternalForm());
+        splashScene.getStylesheets().add(P2PApplication.class.getResource("dark.css").toExternalForm());
 
         stage.setMinHeight(550);
         stage.setMinWidth(360);
@@ -55,12 +55,12 @@ public class HelloApplication extends Application {
 
         connectTask.setOnSucceeded(e -> {
             try {
-                FXMLLoader fxmlLoader = new FXMLLoader(HelloApplication.class.getResource("repositoryList.fxml"));
+                FXMLLoader fxmlLoader = new FXMLLoader(P2PApplication.class.getResource("repositoryList.fxml"));
                 Scene mainScene = new Scene(fxmlLoader.load(), 360, 550);
-                mainScene.getStylesheets().add(HelloApplication.class.getResource("styles.css").toExternalForm());
+                mainScene.getStylesheets().add(P2PApplication.class.getResource("styles.css").toExternalForm());
 
                 String theme = SettingsDialog.getSetting("theme", "dark");
-                mainScene.getStylesheets().add(HelloApplication.class.getResource(theme + ".css").toExternalForm());
+                mainScene.getStylesheets().add(P2PApplication.class.getResource(theme + ".css").toExternalForm());
 
                 stage.setScene(mainScene);
             } catch (IOException ex) {
@@ -90,8 +90,8 @@ public class HelloApplication extends Application {
             errorBox.getChildren().add(errorLabel);
 
             Scene errorScene = new Scene(errorBox, 360, 200);
-            errorScene.getStylesheets().add(HelloApplication.class.getResource("styles.css").toExternalForm());
-            errorScene.getStylesheets().add(HelloApplication.class.getResource("dark.css").toExternalForm());
+            errorScene.getStylesheets().add(P2PApplication.class.getResource("styles.css").toExternalForm());
+            errorScene.getStylesheets().add(P2PApplication.class.getResource("dark.css").toExternalForm());
 
             stage.setScene(errorScene);
         });

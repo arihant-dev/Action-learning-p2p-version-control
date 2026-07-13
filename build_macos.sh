@@ -78,7 +78,7 @@ jpackage \
     --name "$APP_NAME" \
     --app-version "$VERSION" \
     --runtime-image target/app \
-    --module org.codehaus.mojo.frontendtest/org.codehaus.mojo.frontendtest.HelloApplication \
+    --module io.p2pvcs.app/io.p2pvcs.app.P2PApplication \
     --dest "$TMP_BUILD_DIR" \
     --verbose
 

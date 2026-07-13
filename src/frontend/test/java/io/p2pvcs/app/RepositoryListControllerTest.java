@@ -1,4 +1,4 @@
-package org.codehaus.mojo.frontendtest;
+package io.p2pvcs.app;
 
 import org.junit.jupiter.api.*;
 import static org.junit.jupiter.api.Assertions.*;

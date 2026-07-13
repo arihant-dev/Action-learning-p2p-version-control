@@ -1,4 +1,4 @@
-package org.codehaus.mojo.frontendtest;
+package io.p2pvcs.app;
 
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
@@ -12,8 +12,8 @@ public class ConflictDialog extends Dialog<String> {
 
         try {
             getDialogPane().getStylesheets().addAll(
-                HelloApplication.class.getResource("styles.css").toExternalForm(),
-                HelloApplication.class.getResource("dark.css").toExternalForm()
+                P2PApplication.class.getResource("styles.css").toExternalForm(),
+                P2PApplication.class.getResource("dark.css").toExternalForm()
             );
             getDialogPane().getStyleClass().add("root");
         } catch (Exception ignored) {}

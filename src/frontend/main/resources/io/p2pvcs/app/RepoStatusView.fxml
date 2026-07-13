@@ -14,7 +14,7 @@
 
 
 <BorderPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
-            fx:controller="org.codehaus.mojo.frontendtest.RepoStatusController"
+            fx:controller="io.p2pvcs.app.RepoStatusController"
             prefWidth="600" prefHeight="450"
             styleClass="root">
 

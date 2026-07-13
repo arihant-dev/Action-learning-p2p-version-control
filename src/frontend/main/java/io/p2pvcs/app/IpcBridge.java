@@ -1,4 +1,4 @@
-package org.codehaus.mojo.frontendtest;
+package io.p2pvcs.app;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
