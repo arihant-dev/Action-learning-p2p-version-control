@@ -6,7 +6,7 @@
 
   <groupId>io.p2pvcs</groupId>
   <artifactId>p2p-version-control</artifactId>
-  <version>1.5.0</version>
+  <version>1.6.1</version>
   <name>p2p-version-control</name>
 
   <properties>

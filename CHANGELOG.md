@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-07-17
+
+### Fixed
+- mDNS discovery regression in v1.6.0: the periodic re-browse implementation closed the zeroconf resolver's shared UDP sockets after each short Browse call, causing mDNS auto-discovery to fail on Ubuntu and panic on macOS. Restored a single long-lived browse with a separate pending-entry retry loop.
+
 ## [1.6.0] - 2026-07-16
 
 ### Added
