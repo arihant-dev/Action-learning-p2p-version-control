@@ -80,10 +80,14 @@ private:
 
             auto* notify = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(buffer.data());
             while (notify) {
-                std::wstring wname(notify->FileName, notify->FileNameLength / sizeof(WCHAR));
-                std::string name(wname.begin(), wname.end());
+            std::wstring wname(notify->FileName, notify->FileNameLength / sizeof(WCHAR));
+            std::string name(wname.begin(), wname.end());
+            // Normalize to forward slashes for cross-platform portability
+            for (auto& ch : name) {
+                if (ch == '\\') ch = '/';
+            }
 
-                switch (notify->Action) {
+            switch (notify->Action) {
                     case FILE_ACTION_ADDED:
                         if (callback_) callback_({WatchEventType::Created, name, ""});
                         break;

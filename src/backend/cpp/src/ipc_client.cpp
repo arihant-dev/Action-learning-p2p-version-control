@@ -55,19 +55,34 @@ public:
         if (socket_ == -1) return false;
         uint32_t len = static_cast<uint32_t>(message.size());
         uint32_t netLen = htonl(len);
-        if (::send(socket_, reinterpret_cast<const char*>(&netLen), sizeof(netLen), 0) < 0) return false;
-        return ::send(socket_, message.data(), len, 0) >= 0;
+        uint32_t totalWritten = 0;
+        while (totalWritten < sizeof(netLen)) {
+            int n = ::send(socket_, reinterpret_cast<const char*>(&netLen) + totalWritten, sizeof(netLen) - totalWritten, 0);
+            if (n <= 0) return false;
+            totalWritten += n;
+        }
+        totalWritten = 0;
+        while (totalWritten < len) {
+            int n = ::send(socket_, message.data() + totalWritten, len - totalWritten, 0);
+            if (n <= 0) return false;
+            totalWritten += n;
+        }
+        return true;
     }
 
     bool receive(std::string& message) override {
         if (socket_ == -1) return false;
         uint32_t netLen = 0;
-        int received = ::recv(socket_, reinterpret_cast<char*>(&netLen), sizeof(netLen), 0);
-        if (received <= 0) return false;
-        uint32_t len = ntohl(netLen);
-        message.resize(len);
-        
         uint32_t totalRead = 0;
+        while (totalRead < sizeof(netLen)) {
+            int n = ::recv(socket_, reinterpret_cast<char*>(&netLen) + totalRead, sizeof(netLen) - totalRead, 0);
+            if (n <= 0) return false;
+            totalRead += n;
+        }
+        uint32_t len = ntohl(netLen);
+        if (len == 0 || len > 10 * 1024 * 1024) return false;
+        message.resize(len);
+        totalRead = 0;
         while (totalRead < len) {
             int n = ::recv(socket_, &message[totalRead], len - totalRead, 0);
             if (n <= 0) return false;
@@ -125,17 +140,40 @@ public:
         if (socketFd_ < 0) return false;
         uint32_t len = static_cast<uint32_t>(message.size());
         uint32_t netLen = htonl(len);
-        if (::write(socketFd_, &netLen, sizeof(netLen)) < 0) return false;
-        return ::write(socketFd_, message.data(), len) >= 0;
+        size_t totalWritten = 0;
+        while (totalWritten < sizeof(netLen)) {
+            ssize_t n = ::write(socketFd_, reinterpret_cast<const char*>(&netLen) + totalWritten, sizeof(netLen) - totalWritten);
+            if (n <= 0) return false;
+            totalWritten += n;
+        }
+        totalWritten = 0;
+        while (totalWritten < len) {
+            ssize_t n = ::write(socketFd_, message.data() + totalWritten, len - totalWritten);
+            if (n <= 0) return false;
+            totalWritten += n;
+        }
+        return true;
     }
 
     bool receive(std::string& message) override {
         if (socketFd_ < 0) return false;
         uint32_t netLen = 0;
-        if (::read(socketFd_, &netLen, sizeof(netLen)) <= 0) return false;
+        size_t totalRead = 0;
+        while (totalRead < sizeof(netLen)) {
+            ssize_t n = ::read(socketFd_, reinterpret_cast<char*>(&netLen) + totalRead, sizeof(netLen) - totalRead);
+            if (n <= 0) return false;
+            totalRead += n;
+        }
         uint32_t len = ntohl(netLen);
+        if (len == 0 || len > 10 * 1024 * 1024) return false;
         message.resize(len);
-        return ::read(socketFd_, &message[0], len) > 0;
+        totalRead = 0;
+        while (totalRead < len) {
+            ssize_t n = ::read(socketFd_, &message[totalRead], len - totalRead);
+            if (n <= 0) return false;
+            totalRead += n;
+        }
+        return true;
     }
 
     void disconnect() override {

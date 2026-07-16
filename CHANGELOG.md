@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-07-16
+
+### Added
+- Active mDNS peer discovery with periodic re-browse, HostName fallback, and pending-entry retry.
+- `peer_list_update` / `repo_list_response` replay buffer for late-connecting IPC clients.
+- Per-file version counter (files now start at v1 and only increment on actual changes).
+- Lamport clock restoration from the database on startup.
+- Cross-platform path normalization to forward slashes across C++ daemon and Go coordinator.
+- Peer count indicator in the main repository list view.
+
+### Fixed
+- Peers not appearing on first launch; required closing and reopening the app.
+- Version numbers inflating globally (e.g., showing v56 on first sync) due to shared Lamport clock.
+- `Witness()` was called unconditionally on every peer metadata update, causing version inflation.
+- Stale peer target addresses persisted after re-discovery.
+- macOS ↔ Windows sync failures caused by backslash path separators and mismatched permissions.
+- Linux inotify watcher dropping subdirectory prefixes from file paths.
+- Duplicate `WindowsIpcClient` class causing ODR link errors on Windows.
+- C++ IPC partial read/write bugs on both Unix and Windows.
+
 ## [1.5.0] - 2026-07-13
 
 ### Added

@@ -34,14 +34,19 @@ type IpcServer struct {
 	// Protects against send-on-closed-channel during shutdown
 	stopChan chan struct{}
 	stopOnce sync.Once
+
+	// Buffer the latest state messages to replay to late-connecting clients
+	latestMessages map[string]*Message
+	latestMu       sync.RWMutex
 }
 
 func NewIpcServer(socketPath string) *IpcServer {
 	return &IpcServer{
-		socketPath: socketPath,
-		clients:    make(map[net.Conn]*sync.Mutex),
-		ToC:        make(chan *Message, 100),
-		stopChan:   make(chan struct{}),
+		socketPath:     socketPath,
+		clients:        make(map[net.Conn]*sync.Mutex),
+		ToC:            make(chan *Message, 100),
+		stopChan:       make(chan struct{}),
+		latestMessages: make(map[string]*Message),
 	}
 }
 
@@ -103,7 +108,32 @@ func (s *IpcServer) acceptConnections() {
 
 		fmt.Printf("C++ daemon connected from: %s\n", conn.RemoteAddr())
 
+		// Replay cached state messages to the new client
+		go s.replayStateMessages(conn)
+
 		go s.handleClient(conn)
+	}
+}
+
+func (s *IpcServer) replayStateMessages(conn net.Conn) {
+	s.latestMu.RLock()
+	msgs := make([]*Message, 0, len(s.latestMessages))
+	for _, msg := range s.latestMessages {
+		msgs = append(msgs, msg)
+	}
+	s.latestMu.RUnlock()
+
+	s.clientMu.Lock()
+	mu, ok := s.clients[conn]
+	s.clientMu.Unlock()
+	if !ok {
+		return
+	}
+
+	for _, msg := range msgs {
+		mu.Lock()
+		_ = WriteMessage(conn, msg)
+		mu.Unlock()
 	}
 }
 
@@ -163,6 +193,14 @@ func (s *IpcServer) SendMessage(msg *Message) {
 	defer func() {
 		_ = recover()
 	}()
+
+	// Cache state messages for late-connecting clients
+	if msg.Type == "peer_list_update" || msg.Type == "repo_list_response" {
+		s.latestMu.Lock()
+		s.latestMessages[msg.Type] = msg
+		s.latestMu.Unlock()
+	}
+
 	select {
 	case <-s.stopChan:
 		// Server is shutting down, drop message
@@ -186,33 +224,62 @@ func (s *IpcServer) Stop() {
 	if s.listener != nil {
 		s.listener.Close()
 	}
-	close(s.ToC)
+	s.stopOnce.Do(func() {
+		close(s.ToC)
+	})
+}
+
+// readFull reads exactly len(buf) bytes from conn.
+func readFull(conn net.Conn, buf []byte) error {
+	for offset := 0; offset < len(buf); {
+		n, err := conn.Read(buf[offset:])
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return fmt.Errorf("unexpected EOF")
+		}
+		offset += n
+	}
+	return nil
+}
+
+// writeFull writes all bytes in buf to conn.
+func writeFull(conn net.Conn, buf []byte) error {
+	for offset := 0; offset < len(buf); {
+		n, err := conn.Write(buf[offset:])
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return fmt.Errorf("write returned 0 bytes")
+		}
+		offset += n
+	}
+	return nil
 }
 
 // ReadMessage reads a length-prefixed JSON message
 func ReadMessage(conn net.Conn) (*Message, error) {
 	// Read 4-byte length prefix (big-endian)
 	lenBuf := make([]byte, 4)
-	n, err := conn.Read(lenBuf)
-	if err != nil || n != 4 {
+	if err := readFull(conn, lenBuf); err != nil {
 		return nil, err
 	}
 
 	len := binary.BigEndian.Uint32(lenBuf)
-	if len > 1024*1024 { // 1MB limit
-		return nil, fmt.Errorf("message too large: %d bytes", len)
+	if len == 0 || len > 1024*1024 { // 1MB limit
+		return nil, fmt.Errorf("invalid message length: %d bytes", len)
 	}
 
 	// Read message body
 	msgBuf := make([]byte, len)
-	n, err = conn.Read(msgBuf)
-	if err != nil || n != int(len) {
+	if err := readFull(conn, msgBuf); err != nil {
 		return nil, err
 	}
 
 	var msg Message
-	err = json.Unmarshal(msgBuf, &msg)
-	if err != nil {
+	if err := json.Unmarshal(msgBuf, &msg); err != nil {
 		return nil, err
 	}
 
@@ -233,14 +300,13 @@ func WriteMessage(conn net.Conn, msg *Message) error {
 	lenBuf := make([]byte, 4)
 	binary.BigEndian.PutUint32(lenBuf, uint32(len(data)))
 
-	if _, err := conn.Write(lenBuf); err != nil {
+	if err := writeFull(conn, lenBuf); err != nil {
 		return err
 	}
 
-	if _, err := conn.Write(data); err != nil {
+	if err := writeFull(conn, data); err != nil {
 		return err
 	}
-
 	return nil
 }
 

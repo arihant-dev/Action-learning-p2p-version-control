@@ -20,6 +20,7 @@
     </MenuBar>
 
     <Label styleClass="title-label" text="P2P Version Control"/>
+    <Label fx:id="peerCountLabel" styleClass="section-label" text="Peers: 0 (0 connected)"/>
     <Label styleClass="section-label" text="Tracked Repositories"/>
     <ListView fx:id="repoListView" onMouseClicked="#handleRepoClick" maxWidth="Infinity" VBox.vgrow="ALWAYS"/>
 

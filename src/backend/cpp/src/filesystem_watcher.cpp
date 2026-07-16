@@ -50,7 +50,7 @@ private:
                     if (!running_) return;
                     if (entry.is_symlink() || !entry.is_regular_file()) continue;
 
-                    std::string relPath = fs::relative(entry.path(), watchPath_).string();
+                    std::string relPath = fs::relative(entry.path(), watchPath_).generic_string();
                     if (relPath.empty() || relPath[0] == '.') continue;
 
                     auto lwt = fs::last_write_time(entry);

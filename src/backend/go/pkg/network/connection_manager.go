@@ -217,8 +217,10 @@ func (cm *ConnectionManager) handleIncomingConnection(conn net.Conn) {
 // Also registers the peer ID, address, and port in target list for auto-reconnection.
 func (cm *ConnectionManager) Connect(peerID, address string, port int) error {
 	cm.mu.Lock()
-	// Add or update target list
-	if _, exists := cm.targets[peerID]; !exists {
+	if t, exists := cm.targets[peerID]; exists {
+		t.address = address
+		t.port = port
+	} else {
 		cm.targets[peerID] = &targetPeer{
 			id:         peerID,
 			address:    address,
@@ -228,7 +230,7 @@ func (cm *ConnectionManager) Connect(peerID, address string, port int) error {
 	}
 	if _, exists := cm.connections[peerID]; exists {
 		cm.mu.Unlock()
-		return nil // Already connected
+		return nil
 	}
 	cm.mu.Unlock()
 
@@ -628,30 +630,25 @@ func (cm *ConnectionManager) dialWithFallback(address string, port int, timeout 
 		return conn, nil
 	}
 
-	// Check if this is an IPv6 link-local address (starts with "fe80:")
 	ip := net.ParseIP(address)
 	if ip != nil && ip.To4() == nil && strings.HasPrefix(strings.ToLower(address), "fe80:") {
-		// 1. Try common fallback zone interfaces
 		interfaces, intErr := net.Interfaces()
 		if intErr == nil {
 			for _, iface := range interfaces {
-				if (iface.Flags & net.FlagUp) != 0 {
-					zonedAddr := net.JoinHostPort(address+"%"+iface.Name, strconv.Itoa(port))
-					log.Printf("[ConnectionManager] Trying fallback zoned address: %s\n", zonedAddr)
-					c, e := net.DialTimeout("tcp", zonedAddr, 2*time.Second)
-					if e == nil {
-						return c, nil
-					}
+				if (iface.Flags&net.FlagUp) == 0 || (iface.Flags&net.FlagLoopback) != 0 {
+					continue
+				}
+				zonedAddr := net.JoinHostPort(address+"%"+iface.Name, strconv.Itoa(port))
+				c, e := net.DialTimeout("tcp", zonedAddr, 1*time.Second)
+				if e == nil {
+					return c, nil
 				}
 			}
 		}
 
-		// 2. Also try localhost fallbacks in case the peer is running locally (e.g. in loopback integration tests)
 		localhosts := []string{"127.0.0.1", "::1"}
 		for _, lhost := range localhosts {
-			laddr := net.JoinHostPort(lhost, strconv.Itoa(port))
-			log.Printf("[ConnectionManager] Trying local fallback address: %s\n", laddr)
-			c, e := net.DialTimeout("tcp", laddr, 1*time.Second)
+			c, e := net.DialTimeout("tcp", net.JoinHostPort(lhost, strconv.Itoa(port)), 1*time.Second)
 			if e == nil {
 				return c, nil
 			}

@@ -161,6 +161,20 @@ func (s *MetadataStore) SoftDelete(repoID, filepath string) error {
 	return nil
 }
 
+// MaxVersion returns the highest version number currently stored across
+// all repositories. Returns 0 if no metadata rows exist.
+func (s *MetadataStore) MaxVersion() (int64, error) {
+	var maxVersion sql.NullInt64
+	err := s.db.QueryRow(`SELECT MAX(version) FROM file_metadata`).Scan(&maxVersion)
+	if err != nil {
+		return 0, fmt.Errorf("max version: %w", err)
+	}
+	if maxVersion.Valid {
+		return maxVersion.Int64, nil
+	}
+	return 0, nil
+}
+
 // HardDelete physically removes a file metadata record.
 func (s *MetadataStore) HardDelete(repoID, filepath string) error {
 	result, err := s.db.Exec(`

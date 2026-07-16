@@ -39,6 +39,14 @@ void print_usage(const char* program_name) {
               << " project-alpha /path/to/watch /tmp/p2p_sync.sock --poll-interval 500\n";
 }
 
+std::string normalize_path(const std::string& path) {
+    std::string result = path;
+    for (auto& ch : result) {
+        if (ch == '\\') ch = '/';
+    }
+    return result;
+}
+
 void handle_ipc_message(const nlohmann::json& msg, const std::string& my_repo_id,
                         const std::string& watch_path) {
     try {
@@ -51,7 +59,7 @@ void handle_ipc_message(const nlohmann::json& msg, const std::string& my_repo_id
             if (!msg_repo_id.empty() && msg_repo_id != my_repo_id) return;
 
             std::string transfer_id = payload.value("transfer_id", "");
-            std::string path = payload.value("path", "");
+            std::string path = normalize_path(payload.value("path", ""));
             std::string peer_id = payload.value("peer_id", "");
             int transfer_port = payload.value("transfer_port", 0);
             std::string expected_hash = payload.value("expected_hash", "");
@@ -73,7 +81,7 @@ void handle_ipc_message(const nlohmann::json& msg, const std::string& my_repo_id
             std::string msg_repo_id = payload.value("repo_id", "");
             if (!msg_repo_id.empty() && msg_repo_id != my_repo_id) return;
 
-            std::string path = payload.value("path", "");
+            std::string path = normalize_path(payload.value("path", ""));
             bool is_delete = payload.value("is_delete", false);
 
             std::cout << "[C++ Daemon] sync_from_peer: path=" << path
@@ -190,17 +198,19 @@ int main(int argc, char* argv[]) {
 
             std::cout << "[C++ Daemon] Event: " << action << " -> " << event.path << "\n";
 
+            std::string normPath = normalize_path(event.path);
+
             // Skip .tmp files (transfer internals) to prevent metadata races.
-            if (event.path.size() >= 4 && event.path.substr(event.path.size() - 4) == ".tmp") {
+            if (normPath.size() >= 4 && normPath.substr(normPath.size() - 4) == ".tmp") {
                 return;
             }
 
             nlohmann::json test_json;
-            test_json["filename"] = event.path;
+            test_json["filename"] = normPath;
             test_json["action"] = action;
             std::cout << "[JSON] " << test_json.dump() << "\n" << std::flush;
 
-            fs::path abs_path = fs::path(watch_path) / event.path;
+            fs::path abs_path = fs::path(watch_path) / normPath;
 
             long long size = 0;
             std::string hash;
@@ -256,7 +266,7 @@ int main(int argc, char* argv[]) {
             nlohmann::json payload;
             payload["repo_id"] = repo_id;
             payload["action"] = action;
-            payload["path"] = event.path;
+            payload["path"] = normPath;
             payload["hash"] = hash;
             payload["size"] = size;
             payload["modified_time"] = modified_time;

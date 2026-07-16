@@ -41,6 +41,20 @@ public:
 
 private:
     int inotifyFd_ = -1;
+    std::map<int, std::string> wdToPath_; // watch descriptor -> relative directory path
+
+    std::string relativeDir(const std::string& path) {
+        if (path == watchPath_) {
+            return "";
+        }
+        if (path.size() > watchPath_.size() &&
+            path.compare(0, watchPath_.size(), watchPath_) == 0 &&
+            path[watchPath_.size()] == '/') {
+            std::string rel = path.substr(watchPath_.size() + 1);
+            return rel;
+        }
+        return "";
+    }
 
     void addWatchRecursive(const std::string& path) {
         uint32_t mask = IN_CREATE | IN_MODIFY | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO;
@@ -49,6 +63,7 @@ private:
             std::cerr << "[InotifyWatcher] Failed to watch " << path << "\n";
             return;
         }
+        wdToPath_[wd] = relativeDir(path);
         try {
             for (const auto& entry : fs::directory_iterator(path)) {
                 if (entry.is_directory()) {
@@ -75,17 +90,22 @@ private:
                 auto* event = reinterpret_cast<const inotify_event*>(ptr);
                 if (event->len > 0) {
                     std::string name(event->name);
+                    std::string relPath = name;
+                    auto it = wdToPath_.find(event->wd);
+                    if (it != wdToPath_.end() && !it->second.empty()) {
+                        relPath = it->second + "/" + name;
+                    }
 
                     if (event->mask & IN_CREATE)
-                        if (callback_) callback_({WatchEventType::Created, name, ""});
+                        if (callback_) callback_({WatchEventType::Created, relPath, ""});
                     if (event->mask & IN_MODIFY)
-                        if (callback_) callback_({WatchEventType::Modified, name, ""});
+                        if (callback_) callback_({WatchEventType::Modified, relPath, ""});
                     if (event->mask & IN_DELETE)
-                        if (callback_) callback_({WatchEventType::Deleted, name, ""});
+                        if (callback_) callback_({WatchEventType::Deleted, relPath, ""});
                     if (event->mask & IN_MOVED_FROM)
-                        if (callback_) callback_({WatchEventType::Deleted, name, ""});
+                        if (callback_) callback_({WatchEventType::Deleted, relPath, ""});
                     if (event->mask & IN_MOVED_TO)
-                        if (callback_) callback_({WatchEventType::Created, name, ""});
+                        if (callback_) callback_({WatchEventType::Created, relPath, ""});
                 }
                 ptr += sizeof(inotify_event) + event->len;
             }

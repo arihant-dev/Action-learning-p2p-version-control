@@ -29,23 +29,29 @@ public class RepositoryListController {
     private Button themeToggleButton;
     @FXML
     private MenuBar menuBar;
+    @FXML
+    private Label peerCountLabel;
     private boolean isDarkMode = true;
 
     private Timeline pollTimeline;
     private final IpcBridge.MessageListener repoListListener = this::handleRepoListResponse;
+    private final IpcBridge.MessageListener peerListListener = this::handlePeerListUpdate;
 
     public void initialize() {
         IpcBridge bridge = IpcBridge.getInstance();
 
         bridge.registerListener("repo_list_response", repoListListener);
+        bridge.registerListener("peer_list_update", peerListListener);
 
         pollTimeline = new Timeline(new KeyFrame(Duration.seconds(1.5), event -> {
             bridge.send("repo_list_request", new Object());
+            bridge.send("peer_list_request", new Object());
         }));
         pollTimeline.setCycleCount(Timeline.INDEFINITE);
         pollTimeline.play();
 
         bridge.send("repo_list_request", new Object());
+        bridge.send("peer_list_request", new Object());
 
         repoListView.sceneProperty().addListener((obs, oldScene, newScene) -> {
             if (newScene != null) {
@@ -71,6 +77,7 @@ public class RepositoryListController {
             pollTimeline.stop();
         }
         IpcBridge.getInstance().removeListener("repo_list_response", repoListListener);
+        IpcBridge.getInstance().removeListener("peer_list_update", peerListListener);
     }
 
     private void handleRepoListResponse(JsonElement payload) {
@@ -96,6 +103,26 @@ public class RepositoryListController {
         if (selectedIndex >= 0 && selectedIndex < repoListView.getItems().size()) {
             repoListView.getSelectionModel().select(selectedIndex);
         }
+    }
+
+    private void handlePeerListUpdate(JsonElement payload) {
+        if (payload == null || !payload.isJsonObject()) return;
+
+        JsonObject obj = payload.getAsJsonObject();
+        if (!obj.has("peers") || obj.get("peers").isJsonNull()) return;
+
+        JsonArray peers = obj.getAsJsonArray("peers");
+        int total = peers.size();
+        int connected = 0;
+        for (JsonElement peerEl : peers) {
+            if (peerEl != null && peerEl.isJsonObject()) {
+                JsonObject peerObj = peerEl.getAsJsonObject();
+                if (peerObj.has("connected") && peerObj.get("connected").getAsBoolean()) {
+                    connected++;
+                }
+            }
+        }
+        peerCountLabel.setText("Peers: " + total + " (" + connected + " connected)");
     }
 
     @FXML

@@ -170,6 +170,7 @@ void handle_file_transfer(
 
             fs::rename(tmp_path, dest_path);
 
+            #ifndef _WIN32
             if (mode > 0) {
                 try {
                     fs::permissions(dest_path, static_cast<fs::perms>(mode));
@@ -177,6 +178,7 @@ void handle_file_transfer(
                     std::cerr << "[C++ Daemon] Permissions error: " << e.what() << "\n";
                 }
             }
+            #endif
 
             std::cout << "[C++ Daemon] Download complete: " << dest_path << "\n";
         } catch (const std::exception& e) {

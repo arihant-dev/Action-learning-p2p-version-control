@@ -93,6 +93,12 @@ func (sc *SyncCoordinator) Start() error {
 		log.Printf("[SyncCoordinator] Warning: failed to load vector clocks: %v\n", err)
 	}
 
+	// Restore Lamport clock so newly assigned versions never regress
+	if maxVer, err := sc.db.Metadata().MaxVersion(); err == nil && maxVer > 0 {
+		sc.lamportClock = versioning.NewLamportClockAt(uint64(maxVer))
+		log.Printf("[SyncCoordinator] Restored Lamport clock to %d\n", maxVer)
+	}
+
 	// Load existing active repositories and start workers
 	repos, err := sc.db.Repositories().List()
 	if err != nil {
@@ -298,7 +304,7 @@ func (sc *SyncCoordinator) HandleLocalFileChanged(repoID string, payload *protoc
 		return fmt.Errorf("repository %s is not active", repoID)
 	}
 
-	// 0. Normalize absolute path to relative path
+	// 0. Normalize absolute path to relative path, then to forward slashes for cross-platform compat
 	if filepath.IsAbs(payload.Path) {
 		repo, err := sc.db.Repositories().Get(repoID)
 		if err == nil && repo != nil {
@@ -307,6 +313,7 @@ func (sc *SyncCoordinator) HandleLocalFileChanged(repoID string, payload *protoc
 			}
 		}
 	}
+	payload.Path = filepath.ToSlash(payload.Path)
 
 	// Skip temporary files (.tmp) created during download — they are
 	// internal to the transfer and should never enter the metadata DB.
@@ -327,8 +334,12 @@ func (sc *SyncCoordinator) HandleLocalFileChanged(repoID string, payload *protoc
 		}
 	}
 
-	// 2. Tick Lamport clock and vector clock for causal ordering
-	nextVersion := sc.lamportClock.Tick()
+	// 2. Determine per-file version and tick vector clock for causal ordering
+	var nextVersion int64 = 1
+	if existing != nil {
+		nextVersion = existing.Version + 1
+	}
+	sc.lamportClock.Tick()
 	sc.vectorClock.Tick(sc.localPeerID)
 
 	// 3. Save new metadata state to SQLite
@@ -337,7 +348,7 @@ func (sc *SyncCoordinator) HandleLocalFileChanged(repoID string, payload *protoc
 		Filepath:          payload.Path,
 		Hash:              payload.Hash,
 		Size:              payload.Size,
-		Version:           int64(nextVersion),
+		Version:           nextVersion,
 		LocalLastModified: payload.ModifiedTime,
 		IsDeleted:         payload.Action == "delete",
 		UpdatedAt:         time.Now().Unix(),
@@ -375,7 +386,7 @@ func (sc *SyncCoordinator) HandleLocalFileChanged(repoID string, payload *protoc
 			"path":          payload.Path,
 			"hash":          payload.Hash,
 			"size":          payload.Size,
-			"version":       nextVersion,
+			"version":       uint64(nextVersion),
 			"modified_time": payload.ModifiedTime,
 			"is_deleted":    payload.Action == "delete",
 			"mode":          payload.Mode,
@@ -395,6 +406,7 @@ func (sc *SyncCoordinator) HandleLocalFileChanged(repoID string, payload *protoc
 // HandlePeerMetadataUpdate processes version changes received from a remote peer.
 func (sc *SyncCoordinator) HandlePeerMetadataUpdate(peerID string, repoID string, update map[string]interface{}) {
 	path, _ := update["path"].(string)
+	path = filepath.ToSlash(path)
 
 	// Ignore metadata for temporary files — they are transfer internals.
 	if strings.HasSuffix(path, ".tmp") {
@@ -413,8 +425,7 @@ func (sc *SyncCoordinator) HandlePeerMetadataUpdate(peerID string, repoID string
 	modifiedTime := int64(modTimeVal)
 	mode := uint32(modeVal)
 
-	// Merge remote clocks to preserve causal ordering
-	sc.lamportClock.Witness(version)
+	// Merge remote vector clock to preserve causal ordering
 	if remoteVC != nil {
 		vcMap := make(map[string]uint64, len(remoteVC))
 		for k, v := range remoteVC {
@@ -454,6 +465,9 @@ func (sc *SyncCoordinator) HandlePeerMetadataUpdate(peerID string, repoID string
 	// 2. Apply resolution
 	switch resolution.Action {
 	case versioning.AcceptRemote:
+		// Witness remote Lamport clock for causal ordering
+		sc.lamportClock.Witness(version)
+
 		if isDeleted {
 			// Save deletion tombstone to SQLite DB
 			meta := sqlite.FileMetadata{
@@ -851,15 +865,19 @@ func (sc *SyncCoordinator) HandleP2PMessage(peerID string, msg *ipc.Message) err
 				return nil
 			}
 			
-			// Update file_metadata in SQLite DB
+			// Update file_metadata in SQLite DB, preserving version set by HandlePeerMetadataUpdate
 			hash := fmt.Sprintf("%x", sha256.Sum256(data))
 			mtime := time.Now().Unix()
+			fileVersion := int64(1)
+			if existingMeta, _ := sc.db.Metadata().Get(pDetails.repoID, payload.Path); existingMeta != nil {
+				fileVersion = existingMeta.Version
+			}
 			meta := &sqlite.FileMetadata{
 				RepositoryID:      pDetails.repoID,
 				Filepath:          payload.Path,
 				Hash:              hash,
 				Size:              int64(len(data)),
-				Version:           int64(sc.lamportClock.Tick()),
+				Version:           fileVersion,
 				LocalLastModified: mtime,
 				IsDeleted:         false,
 				UpdatedAt:         time.Now().UnixNano() / int64(time.Millisecond),
@@ -1147,9 +1165,10 @@ func (sc *SyncCoordinator) ScanAndIndexLocalFiles(repoID, localPath string) erro
 		if err != nil {
 			return err
 		}
+		rel = filepath.ToSlash(rel)
 
 		if rel != "." {
-			parts := strings.Split(rel, string(filepath.Separator))
+			parts := strings.Split(rel, "/")
 			for _, part := range parts {
 				if strings.HasPrefix(part, ".") {
 					if d.IsDir() {
@@ -1210,15 +1229,16 @@ func (sc *SyncCoordinator) ScanAndIndexLocalFiles(repoID, localPath string) erro
 			}
 
 			// Actual modification offline while app was closed!
-			nextVersion := sc.lamportClock.Tick()
+			sc.lamportClock.Tick()
 			sc.vectorClock.Tick(sc.localPeerID)
+			nextVersion := existing.Version + 1
 
 			meta := sqlite.FileMetadata{
 				RepositoryID:      repoID,
 				Filepath:          rel,
 				Hash:              hash,
 				Size:              size,
-				Version:           int64(nextVersion),
+				Version:           nextVersion,
 				LocalLastModified: modTime,
 				IsDeleted:         false,
 				UpdatedAt:         time.Now().UnixMilli(),
@@ -1254,7 +1274,7 @@ func (sc *SyncCoordinator) ScanAndIndexLocalFiles(repoID, localPath string) erro
 				return nil
 			}
 
-			nextVersion := sc.lamportClock.Tick()
+			sc.lamportClock.Tick()
 			sc.vectorClock.Tick(sc.localPeerID)
 
 			meta := sqlite.FileMetadata{
@@ -1262,7 +1282,7 @@ func (sc *SyncCoordinator) ScanAndIndexLocalFiles(repoID, localPath string) erro
 				Filepath:          rel,
 				Hash:              hash,
 				Size:              size,
-				Version:           int64(nextVersion),
+				Version:           1,
 				LocalLastModified: modTime,
 				IsDeleted:         false,
 				UpdatedAt:         time.Now().UnixMilli(),
@@ -1312,11 +1332,11 @@ func (sc *SyncCoordinator) ScanAndIndexLocalFiles(repoID, localPath string) erro
 		}
 		if !seenFiles[dbFile.Filepath] && !dbFile.IsDeleted {
 			// This file was deleted offline!
-			nextVersion := sc.lamportClock.Tick()
+			sc.lamportClock.Tick()
 			sc.vectorClock.Tick(sc.localPeerID)
+			dbFile.Version = dbFile.Version + 1
 
 			dbFile.IsDeleted = true
-			dbFile.Version = int64(nextVersion)
 			dbFile.UpdatedAt = time.Now().UnixMilli()
 
 			if err := sc.db.Metadata().Save(dbFile); err != nil {

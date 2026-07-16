@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if(WIN32)
-    set(PLATFORM_SOURCES src/readdirectorychanges_watcher.cpp src/ipc_client_win.cpp)
+    set(PLATFORM_SOURCES src/readdirectorychanges_watcher.cpp)
     set(PLATFORM_LIBS ws2_32)
     add_definitions(-D_WIN32_WINNT=0x0601)
 elseif(APPLE)

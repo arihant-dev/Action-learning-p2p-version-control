@@ -278,7 +278,8 @@ func main() {
 
 		switch msg.Type {
 		case "peer_list_request":
-			// Send peer list back to C++
+			// Trigger a fresh mDNS browse to pick up any newly appeared peers
+			peerRegistry.RequestRefresh()
 			return sendPeerList(peerRegistry, connMgr, ipcServer)
 		case "add_peer":
 			var p struct {
