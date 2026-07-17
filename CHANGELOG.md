@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.6.2] - 2026-07-17
+
+### Added
+- Containerized multi-peer network test harness (`scripts/docker_harness.py`, `Dockerfile.e2e`, `docker-compose.test.yml`) with isolated scenarios: basic two-peer sync, three-peer sync, and network partition via real Docker network disconnect/reconnect.
+- Cross-platform IPC over TCP via `IPC_TCP_PORT` environment variable, enabling native Windows E2E tests.
+- Windows `windows-latest` runner in the Integration Tests workflow.
+- Docker E2E CI workflow (`docker-e2e.yml`) running the containerized harness on every push.
+
+### Fixed
+- Python integration harness now works on Windows: TCP IPC, platform-specific temp folders, `.exe` binary names, and cross-platform process termination.
+
 ## [1.6.1] - 2026-07-17
 
 ### Fixed
