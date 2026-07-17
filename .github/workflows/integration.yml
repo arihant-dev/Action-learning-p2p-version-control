@@ -13,10 +13,7 @@ jobs:
   e2e:
     strategy:
       matrix:
-        # The harness communicates over Unix domain sockets, which Windows
-        # does not support the same way.
-        # TODO windows E2E needs TCP IPC
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
@@ -34,9 +31,14 @@ jobs:
           java-version: "21"
 
       - name: Build Go coordinator
+        shell: bash
         run: |
           cd src/backend/go
-          go build -o ../../../build/go_coordinator .
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            go build -o ../../../build/go_coordinator.exe .
+          else
+            go build -o ../../../build/go_coordinator .
+          fi
 
       - name: Setup CMake
         uses: jwlawson/actions-setup-cmake@v2
@@ -52,15 +54,42 @@ jobs:
           echo "OPENSSL_ROOT_DIR=$(brew --prefix openssl)" >> "$GITHUB_ENV"
 
       - name: Build C++ daemon
+        if: runner.os != 'Windows'
         run: |
           cd src/backend/cpp
           cmake -B build -DBUILD_TESTS=ON
           cmake --build build
 
+      - name: Build C++ daemon (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cmake -S src/backend/cpp -B src/backend/cpp/build
+          cmake --build src/backend/cpp/build --config Release
+          $candidates = @(
+            "src/backend/cpp/build/Release/p2p_daemon.exe",
+            "src/backend/cpp/build/bin/Release/p2p_daemon.exe",
+            "src/backend/cpp/build/bin/p2p_daemon.exe"
+          )
+          $found = $false
+          foreach ($c in $candidates) {
+            if (Test-Path $c) {
+              Copy-Item $c build/p2p_daemon.exe
+              $found = $true
+              Write-Host "Copied daemon from: $c"
+              break
+            }
+          }
+          if (-not $found) {
+            throw "Cannot find p2p_daemon.exe build output"
+          }
+
       - name: Build Java frontend
+        shell: bash
         run: ./mvnw compile --no-transfer-progress
 
       - name: Run E2E integration tests
+        shell: bash
         env:
           # GitHub-hosted macOS runners block multicast/mDNS between loopback
           # processes, so the dedicated mDNS auto-discovery test cannot connect
@@ -68,7 +97,11 @@ jobs:
           # single test as SKIPPED, not FAILED); Linux keeps it strict.
           P2P_E2E_MDNS_OPTIONAL: ${{ matrix.os == 'macos-latest' && '1' || '' }}
         run: |
-          python3 scripts/integration_harness.py
+          if command -v python3 &> /dev/null; then
+            python3 scripts/integration_harness.py
+          else
+            python scripts/integration_harness.py
+          fi
 
       - name: Upload logs on failure
         if: failure()
