@@ -134,11 +134,20 @@ def _kill_signal():
 
 def kill_process(proc, sig=None, wait=3.0):
     """Send a signal to a single peer process (to simulate a crash or a
-    network partition) without disturbing any other running peer."""
+    network partition) without disturbing any other running peer.
+
+    On Windows, Unix signals like SIGTERM/SIGKILL are not reliable with
+    console processes, so we use proc.kill() / TerminateProcess directly.
+    """
     if sig is None:
         sig = _kill_signal()
     try:
-        proc.send_signal(sig)
+        if is_windows():
+            # Hard terminate immediately; this is the only reliable way to
+            # stop the coordinator on Windows and release its ports.
+            proc.kill()
+        else:
+            proc.send_signal(sig)
         proc.wait(timeout=wait)
     except subprocess.TimeoutExpired:
         try:
