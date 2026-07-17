@@ -1,0 +1,13 @@
+.git
+.github
+*.md
+build/
+target/
+src/backend/cpp/build/
+src/backend/go/build/
+__pycache__/
+*.pyc
+*.log
+.DS_Store
+node_modules/
+.agents/

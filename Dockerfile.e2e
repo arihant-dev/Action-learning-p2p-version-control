@@ -1,0 +1,47 @@
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PATH=$PATH:/usr/local/go/bin
+
+# Build toolchain + runtime deps + Python for the entrypoint
+RUN apt-get update && apt-get install -y \
+    openjdk-21-jdk \
+    maven \
+    cmake \
+    g++ \
+    make \
+    binutils \
+    fakeroot \
+    curl \
+    libssl-dev \
+    ca-certificates \
+    python3 \
+    python3-pip \
+    net-tools \
+    iputils-ping \
+    iptables \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Go (architecture-aware so it works on both amd64 and arm64 hosts)
+RUN arch=$(uname -m) && \
+    if [ "$arch" = "aarch64" ]; then arch="arm64"; fi && \
+    curl -OL https://golang.org/dl/go1.24.4.linux-${arch}.tar.gz && \
+    tar -C /usr/local -xzf go1.24.4.linux-${arch}.tar.gz && \
+    rm go1.24.4.linux-${arch}.tar.gz
+
+WORKDIR /workspace
+
+# Copy the whole repo and build the backend binaries once.
+# The resulting image is reused for every peer in docker-compose.test.yml.
+COPY . .
+
+RUN cd src/backend/go && \
+    go build -o /usr/local/bin/go_coordinator .
+
+RUN cd src/backend/cpp && \
+    cmake -B build -DBUILD_TESTS=OFF && \
+    cmake --build build && \
+    cp build/bin/p2p_daemon /usr/local/bin/p2p_daemon
+
+# Peer entrypoint: starts the Go coordinator and tells it to add the repo.
+ENTRYPOINT ["python3", "/workspace/scripts/peer-entrypoint.py"]

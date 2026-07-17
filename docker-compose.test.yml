@@ -1,0 +1,158 @@
+# Isolated multi-peer network test environment.
+# The host-side orchestrator (scripts/docker_harness.py) starts this stack,
+# drives scenarios using docker compose exec, and tears it down.
+
+services:
+  peer-a:
+    build:
+      context: .
+      dockerfile: Dockerfile.e2e
+    container_name: peer-a
+    environment:
+      PEER_ID: peer-a
+      P2P_PORT: "9881"
+      IPC_TCP_PORT: "19881"
+      HEALTH_PORT: "10981"
+      DB_PATH: /data/peer-a.db
+      REPO_ID: test-repo
+      REPO_PATH: /data/repo
+      P2P_DISABLE_MDNS: "1"
+      PEER_ADDRESSES: peer-b@peer-b:9882
+    volumes:
+      - peer-a-data:/data
+    networks:
+      - p2p-test
+
+  peer-b:
+    build:
+      context: .
+      dockerfile: Dockerfile.e2e
+    container_name: peer-b
+    environment:
+      PEER_ID: peer-b
+      P2P_PORT: "9882"
+      IPC_TCP_PORT: "19882"
+      HEALTH_PORT: "10982"
+      DB_PATH: /data/peer-b.db
+      REPO_ID: test-repo
+      REPO_PATH: /data/repo
+      P2P_DISABLE_MDNS: "1"
+      PEER_ADDRESSES: peer-a@peer-a:9881
+    volumes:
+      - peer-b-data:/data
+    networks:
+      - p2p-test
+
+  peer-1:
+    build:
+      context: .
+      dockerfile: Dockerfile.e2e
+    container_name: peer-1
+    environment:
+      PEER_ID: peer-1
+      P2P_PORT: "9890"
+      IPC_TCP_PORT: "19990"
+      HEALTH_PORT: "10990"
+      DB_PATH: /data/peer-1.db
+      REPO_ID: shared-repo
+      REPO_PATH: /data/repo
+      P2P_DISABLE_MDNS: "1"
+      PEER_ADDRESSES: peer-2@peer-2:9891,peer-3@peer-3:9892
+    volumes:
+      - peer-1-data:/data
+    networks:
+      - p2p-test
+
+  peer-2:
+    build:
+      context: .
+      dockerfile: Dockerfile.e2e
+    container_name: peer-2
+    environment:
+      PEER_ID: peer-2
+      P2P_PORT: "9891"
+      IPC_TCP_PORT: "19991"
+      HEALTH_PORT: "10991"
+      DB_PATH: /data/peer-2.db
+      REPO_ID: shared-repo
+      REPO_PATH: /data/repo
+      P2P_DISABLE_MDNS: "1"
+      PEER_ADDRESSES: peer-1@peer-1:9890,peer-3@peer-3:9892
+    volumes:
+      - peer-2-data:/data
+    networks:
+      - p2p-test
+
+  peer-3:
+    build:
+      context: .
+      dockerfile: Dockerfile.e2e
+    container_name: peer-3
+    environment:
+      PEER_ID: peer-3
+      P2P_PORT: "9892"
+      IPC_TCP_PORT: "19992"
+      HEALTH_PORT: "10992"
+      DB_PATH: /data/peer-3.db
+      REPO_ID: shared-repo
+      REPO_PATH: /data/repo
+      P2P_DISABLE_MDNS: "1"
+      PEER_ADDRESSES: peer-1@peer-1:9890,peer-2@peer-2:9891
+    volumes:
+      - peer-3-data:/data
+    networks:
+      - p2p-test
+
+  peer-partition-a:
+    build:
+      context: .
+      dockerfile: Dockerfile.e2e
+    container_name: peer-partition-a
+    environment:
+      PEER_ID: peer-partition-a
+      P2P_PORT: "9920"
+      IPC_TCP_PORT: "19920"
+      HEALTH_PORT: "10920"
+      DB_PATH: /data/peer-partition-a.db
+      REPO_ID: partition-repo
+      REPO_PATH: /data/repo
+      P2P_DISABLE_MDNS: "1"
+      PEER_ADDRESSES: peer-partition-b@peer-partition-b:9921
+    volumes:
+      - peer-partition-a-data:/data
+    networks:
+      - p2p-test
+
+  peer-partition-b:
+    build:
+      context: .
+      dockerfile: Dockerfile.e2e
+    container_name: peer-partition-b
+    environment:
+      PEER_ID: peer-partition-b
+      P2P_PORT: "9921"
+      IPC_TCP_PORT: "19921"
+      HEALTH_PORT: "10921"
+      DB_PATH: /data/peer-partition-b.db
+      REPO_ID: partition-repo
+      REPO_PATH: /data/repo
+      P2P_DISABLE_MDNS: "1"
+      PEER_ADDRESSES: peer-partition-a@peer-partition-a:9920
+    volumes:
+      - peer-partition-b-data:/data
+    networks:
+      - p2p-test
+
+networks:
+  p2p-test:
+    name: p2p-test
+    driver: bridge
+
+volumes:
+  peer-a-data:
+  peer-b-data:
+  peer-1-data:
+  peer-2-data:
+  peer-3-data:
+  peer-partition-a-data:
+  peer-partition-b-data:
