@@ -127,9 +127,16 @@ def start_peer(peer_id, p2p_port, db_path, socket_path, dir_path, extra_env=None
     return proc
 
 
-def kill_process(proc, sig=signal.SIGKILL, wait=3.0):
+def _kill_signal():
+    """Return SIGKILL on Unix, SIGTERM on Windows (which has no SIGKILL)."""
+    return signal.SIGKILL if hasattr(signal, "SIGKILL") else signal.SIGTERM
+
+
+def kill_process(proc, sig=None, wait=3.0):
     """Send a signal to a single peer process (to simulate a crash or a
     network partition) without disturbing any other running peer."""
+    if sig is None:
+        sig = _kill_signal()
     try:
         proc.send_signal(sig)
         proc.wait(timeout=wait)
@@ -336,7 +343,7 @@ def terminate_processes():
             p.wait(timeout=3.0)
         except subprocess.TimeoutExpired:
             try:
-                os.kill(p.pid, signal.SIGKILL)
+                p.kill()
                 p.wait(timeout=1.0)
             except (ProcessLookupError, subprocess.TimeoutExpired):
                 pass
@@ -751,7 +758,7 @@ def test_daemon_crash_recovery():
         return False
 
     log(f"Crashing {peer_a_id}'s coordinator (SIGKILL, no graceful shutdown)...")
-    kill_process(proc_a, sig=signal.SIGKILL)
+    kill_process(proc_a, sig=_kill_signal())
 
     log(f"Recovering: restarting {peer_a_id} (same db/dir/socket/port)...")
     start_peer(peer_a_id, port_a, db_a, sock_a, dir_a, extra_env=mdns_off)
