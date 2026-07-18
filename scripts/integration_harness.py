@@ -24,9 +24,14 @@ import sqlite3
 import urllib.request
 import urllib.error
 
-# Test directories - use Workspace Root to ensure reliable paths across all platforms and easy logging
+# Test directories - use Workspace Root for logs, but short paths for sockets on Linux/macOS to avoid 108-char limit
 WORKSPACE_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-BASE_DIR = os.path.join(WORKSPACE_ROOT, "tmp_p2p_test")
+
+if platform.system() == "Windows":
+    BASE_DIR = os.path.join(tempfile.gettempdir(), "p2p_test")
+else:
+    BASE_DIR = "/tmp/p2p_test"
+
 PEER_DIRS = {}
 PEER_DBS = {}
 PEER_SOCKETS = {}
@@ -642,6 +647,7 @@ def test_network_partition():
     if not wait_for_connections(port_a + 1000, 1, timeout=20.0):
         log("Peers never connected before partition")
         return False
+    time.sleep(2.0)  # Let C++ daemon and Go coordinator fully stabilize and start watching
 
     # 1. Sync a first file to establish a healthy baseline before partitioning.
     create_file(dir_a, "before_partition.txt", "hello before partition")
@@ -783,6 +789,7 @@ def test_daemon_crash_recovery():
     if not wait_for_connections(port_a + 1000, 1, timeout=20.0):
         log("Peers never connected before crash")
         return False
+    time.sleep(2.0)  # Let C++ daemon and Go coordinator fully stabilize and start watching
 
     create_file(dir_a, "before_crash.txt", "hello before crash")
     if not check_file_exists(dir_b, "before_crash.txt", "hello before crash", timeout=20):
@@ -809,6 +816,7 @@ def test_daemon_crash_recovery():
     if not wait_for_connections(port_a + 1000, 1, timeout=20.0):
         log("Peers did not reconnect after recovery")
         return False
+    time.sleep(2.0)  # Let connection and watch sessions fully initialize
 
     # Persistence check: the file synced BEFORE the crash must still be
     # present on disk, proving on-disk state survived the crash.
