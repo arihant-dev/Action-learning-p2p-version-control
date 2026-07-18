@@ -24,10 +24,16 @@ P2P Version Control syncs files directly between your devices over a local netwo
 
 **macOS**
 
-1. Download the latest `.dmg` from the [Releases page](https://github.com/EAinsley/Action-learning-p2p-version-control/releases)
+1. Download the latest `.dmg` from the [Releases page](https://github.com/arihant-dev/Action-learning-p2p-version-control/releases)
 2. Open the DMG file
 3. Drag `P2PVersionControl.app` to your Applications folder
 4. Launch from Applications
+
+**Windows**
+
+1. Download the latest `.msi` or `.zip` from the [Releases page](https://github.com/arihant-dev/Action-learning-p2p-version-control/releases)
+2. If using the `.msi`, run the installer and follow the instructions
+3. If using the `.zip`, extract the archive and run `P2PVersionControl.exe`
 
 **Linux**
 
@@ -386,8 +392,7 @@ Yes. All peers that share a repository will sync changes between each other.
 
 **Q: Does it work on Windows?**
 
-Windows support is currently experimental. The Go coordinator and Java frontend
-work, but the C++ daemon needs Windows porting (named pipes instead of Unix sockets).
+Yes, absolutely! Windows is now fully supported. The Go coordinator, C++ daemon, and JavaFX frontend run natively on Windows. Communication between the components uses standard local TCP loopback sockets cleanly and securely on Windows. Release builds provide a convenient MSI installer (`.msi`) as well as zip bundles.
 
 **Q: Can I use this across different networks (e.g. home and office)?**
 

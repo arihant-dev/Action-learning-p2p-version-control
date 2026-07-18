@@ -21,7 +21,7 @@ single-node desktop, multi-node team, and Docker.
 
 ### macOS
 
-1. Download the `.dmg` from the [Releases page](https://github.com/EAinsley/Action-learning-p2p-version-control/releases)
+1. Download the `.dmg` from the [Releases page](https://github.com/arihant-dev/Action-learning-p2p-version-control/releases)
 2. Open the DMG and drag `P2PVersionControl.app` to Applications
 3. Launch from Applications
 
@@ -47,10 +47,14 @@ Or build from source:
 ./target/bundle/P2PVersionControl/bin/P2PVersionControl
 ```
 
-### Windows (prerelease)
+### Windows
 
-Windows is currently experimental. The Go coordinator uses TCP loopback
-fallback (`127.0.0.1:9999`) for IPC. Build scripts for Windows are in development.
+Windows is fully natively supported. The application compiles natively and is packaged as a standard installer (`.msi`) or executable `.zip`. Because Windows does not support native Unix domain sockets on older platforms, the IPC layer automatically utilizes a secure local TCP loopback (`127.0.0.1:<IPC_TCP_PORT>`) channel for Go ↔ C++ ↔ Java coordination.
+
+```powershell
+# Run the packaged executable or installer
+P2PVersionControl.exe
+```
 
 ---
 
@@ -185,9 +189,11 @@ volumes:
 | ---------------------- | ------------------------ | --------------------------------------------------- |
 | `PEER_ID`             | hostname                | Unique peer identifier used in handshake            |
 | `P2P_PORT`            | 9876                     | TCP port for P2P connections                        |
-| `IPC_SOCKET`          | `/tmp/p2p_sync.sock`    | Unix domain socket path for IPC                     |
+| `IPC_SOCKET`          | `/tmp/p2p_sync.sock`    | Unix domain socket path for IPC (Linux/macOS default)|
+| `IPC_TCP_PORT`        | (none)                   | Local TCP port for loopback IPC (Defaults to Unix Sockets on macOS/Linux if not set; mandatory on Windows) |
 | `DB_PATH`             | `p2p_sync.db`           | Path to SQLite database file                        |
 | `PEER_ADDRESSES`      | (none)                   | Manual peer list (`id@host:port,id2@host2:port2`)   |
+| `P2P_E2E_MDNS_OPTIONAL`| `0`                      | If set to `1`, mDNS auto-discovery failure during testing is bypassed/skipped (useful for macOS/Windows CI machines where multicast is blocked) |
 | `P2P_TLS_ENABLED`     | `false`                  | Enable mutual TLS for P2P connections               |
 | `P2P_TLS_CERT_DIR`    | `~/.p2p/certs`          | Directory for TLS certificates                      |
 | `P2P_CA_CERT`         | `ca.crt`                 | CA certificate filename                             |

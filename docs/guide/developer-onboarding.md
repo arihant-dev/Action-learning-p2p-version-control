@@ -175,6 +175,10 @@ docs: add conflict resolution flow diagram
 
 ### Running Tests
 
+We support multiple layers of testing to verify your changes:
+
+#### 1. Unit Tests
+
 ```bash
 # Go tests (all packages)
 cd src/backend/go && go test ./... -count=1 -v
@@ -184,10 +188,30 @@ cd src/backend/cpp && ctest --test-dir build --output-on-failure
 
 # Java compilation check
 ./mvnw compile
-
-# End-to-end integration test
-python3 .agents/skills/p2p-multi-agent-testing/scripts/integration_harness.py
 ```
+
+#### 2. Native Multi-Peer E2E Integration Tests
+
+Runs a native local multi-peer sync network (2-peer, 3-peer mesh, conflict resolution, metrics, crash recovery, etc.) directly on your host machine. This test harness is fully compatible with Linux, macOS, and Windows:
+
+```bash
+# From project root
+python3 scripts/integration_harness.py
+```
+
+*   **Windows / TCP IPC:** On Windows, standard Unix sockets are unavailable. The harness automatically uses TCP loopback sockets for Go-C++ IPC by setting the `IPC_TCP_PORT` environment variable (e.g., `IPC_TCP_PORT=9001` for peer 1).
+*   **mDNS restrictions:** If you are running tests on an environment that blocks multicast/mDNS (such as virtual machines, CI hosts like GitHub Actions macOS/Windows runners, or secure VPNs), set the environment variable `P2P_E2E_MDNS_OPTIONAL=1`. The harness will bypass mDNS auto-discovery and use pre-configured static network addresses.
+
+#### 3. Containerized Network Partition & Mesh Tests (Docker Compose)
+
+Runs a fully isolated network of peers, each in their own separate container. This simulates real-world conditions, including network partitions/heal scenarios, three-peer sync mesh topology, and packet routing:
+
+```bash
+# Run the Docker-based E2E harness (requires Docker and python3)
+python3 scripts/docker_harness.py
+```
+
+This starts a clean build of your Go coordinator and C++ daemon inside a lightweight Ubuntu environment, launches a multi-peer network via Docker Compose, runs synchronization test cases, injects a partition (by separating peer containers), verifies divergence, heals the partition, and verifies convergence.
 
 ### Pre-commit Hooks
 
@@ -293,16 +317,22 @@ conn.Write(msg) // 4-byte length prefix + JSON
 | C++ (stdout) | Captured by Go coordinator | C++ daemon |
 | SQLite       | `p2p_sync.db`         | Metadata database |
 
-### IPC Socket
+### IPC Socket & TCP IPC
+
+On Unix-based systems (Linux, macOS), communication defaults to Unix domain sockets. On Windows, or when explicitly requested on Unix, the IPC transport runs over TCP.
 
 ```bash
-# Verify IPC socket exists
+# Verify Unix domain IPC socket exists (on Linux/macOS)
 ls -la /tmp/p2p_sync.sock
 
-# Monitor IPC traffic (requires jq)
-sudo tcpdump -i lo0 -A port 9999 | grep "type"  # TCP fallback
+# Or if you are running IPC over local TCP (Windows or manual):
+# Default TCP fallback is localhost:9999, or custom via IPC_TCP_PORT
+curl http://localhost:9999/health  # or your assigned IPC_TCP_PORT
 
-# Watch the socket file descriptor
+# Monitor IPC traffic on localhost if running TCP IPC (requires tcpdump / jq)
+sudo tcpdump -i lo0 -A port 9999 | grep "type"
+
+# Watch the Unix socket file descriptor
 lsof /tmp/p2p_sync.sock
 ```
 

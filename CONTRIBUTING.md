@@ -22,7 +22,7 @@ described there. In short, we expect all contributors to:
 
 ### 1. Find Something to Work On
 
-- **Issues:** Look for [open issues](https://github.com/EAinsley/Action-learning-p2p-version-control/issues)
+- **Issues:** Look for [open issues](https://github.com/arihant-dev/Action-learning-p2p-version-control/issues)
   labeled `good first issue` or `help wanted`
 - **Feature requests:** Check if there's a feature you'd like to implement
 - **Bugs:** Report bugs via the [bug report template](.github/ISSUE_TEMPLATE/bug_report.md)

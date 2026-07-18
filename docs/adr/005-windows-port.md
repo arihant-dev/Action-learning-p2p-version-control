@@ -15,15 +15,19 @@ The three components have different Windows readiness:
 
 | Component | Windows Status | Issue |
 |-----------|---------------|------|
-| Go coordinator | ✅ Works | Uses TCP fallback for IPC (`127.0.0.1:9999`) |
+| Go coordinator | ✅ Works | Uses TCP socket IPC or fallback |
 | Java frontend | ✅ Works | Java's socket API is cross-platform |
-| C++ daemon | ❌ Broken | Uses `AF_UNIX`, POSIX headers |
+| C++ daemon | ✅ Works | Supports TCP loopback IPC natively |
 
 ## Decision
 
-On Windows, we will replace the IPC transport from **Unix sockets** to **Named Pipes**
-for the C++ daemon. The Go coordinator already falls back to TCP loopback,
-but Named Pipes offer better performance and integration with Windows.
+On Windows, we will use **TCP Loopback sockets** (`127.0.0.1`) instead of Win32 Named Pipes. This keeps the socket code extremely portable, utilizing standard cross-platform BSD sockets APIs across all three components (Go, C++, Java), and completely avoids complex Win32-specific APIs.
+
+To support this cleanly and securely across testing environments and multiple parallel instances, we introduce the `IPC_TCP_PORT` environment variable. When `IPC_TCP_PORT` is specified:
+1. The Go coordinator listens on `127.0.0.1:<IPC_TCP_PORT>` for local frontend/daemon connections.
+2. The C++ daemon connects to `127.0.0.1:<IPC_TCP_PORT>` for IPC.
+
+If `IPC_TCP_PORT` is not specified, the system continues to use **Unix Domain Sockets** (`/tmp/p2p_sync.sock`) on Linux and macOS as the default high-performance transport. On Windows, setting `IPC_TCP_PORT` (or falling back to a default port) is standard.
 
 ### IPC Transport by Platform
 
@@ -31,29 +35,25 @@ but Named Pipes offer better performance and integration with Windows.
 |-----------|---------------|-----------|
 | Linux     | Unix socket   | Best performance, native POSIX |
 | macOS     | Unix socket   | Same as Linux |
-| Windows   | Named pipe    | Windows-native, integrated with security descriptors |
+| Windows   | TCP Loopback  | Simple, cross-platform socket code, highly robust |
 
-### Named Pipe Implementation (Windows)
+### TCP Loopback Implementation
 
 ```cpp
+// Common connection logic in C++ (src/backend/cpp/src/ipc_client.cpp)
 #ifdef _WIN32
-    // Server side (Go):
-    // Go creates a named pipe: \\.\pipe\p2p_sync
-    
-    // Client side (C++):
-    HANDLE pipe = CreateFile(
-        L"\\\\.\\pipe\\p2p_sync",
-        GENERIC_READ | GENERIC_WRITE,
-        FILE_SHARE_READ | FILE_SHARE_WRITE,
-        NULL,
-        OPEN_EXISTING,
-        FILE_ATTRIBUTE_NORMAL,
-        NULL
-    );
-    
-    // Use ReadFile/WriteFile instead of read/write
-    // Use OVERLAPPED for async I/O
+    // Windows socket initialization
+    WSADATA wsaData;
+    WSAStartup(MAKEWORD(2, 2), &wsaData);
 #endif
+
+    // If port is parsed from IPC_TCP_PORT environment variable, connect via TCP:
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    struct sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
+    connect(sock, (struct sockaddr*)&addr, sizeof(addr));
 ```
 
 ### Build System Changes
@@ -72,9 +72,9 @@ endif()
 
 ```
 ipc_client::connect(socket_path):
-    if Windows AND socket_path contains "\\pipe\\":
-        connect_named_pipe(socket_path)
-    elif socket_path contains "/":
+    if IPC_TCP_PORT environment variable is set:
+        connect_tcp_socket("127.0.0.1", IPC_TCP_PORT)
+    elif socket_path contains "/" or starts with ".":
         connect_unix_socket(socket_path)
     else:
         connect_tcp_socket("127.0.0.1", 9999)  // fallback
@@ -83,21 +83,19 @@ ipc_client::connect(socket_path):
 ## Consequences
 
 **Positive:**
-- Full Windows support for the C++ daemon
-- Named Pipes have better performance than TCP loopback (kernel-level)
-- Windows security model (DACL) can restrict pipe access
-- Same framing protocol (4-byte length prefix + JSON) as Unix sockets
+- Full, native Windows support for the C++ daemon using standard BSD sockets APIs.
+- Extreme simplicity: minimal platform-specific code. No complex overlapped I/O or multi-threaded named pipes code to maintain.
+- Standardized cross-platform E2E network testing harness (using `IPC_TCP_PORT` to spin up isolated peers concurrently on the same host).
+- Identical JSON-framed protocol (4-byte length prefix + JSON) across Unix Domain Sockets and TCP socket transports.
 
 **Negative:**
-- Additional code to maintain (platform-specific IPC client)
-- Named Pipes require Async I/O or overlapped I/O for non-blocking
-- Testing requires actual Windows environments
-- Different error handling patterns (`GetLastError()` vs `errno`)
+- Port management: loopback TCP port must be assigned/configured securely (handled seamlessly via `IPC_TCP_PORT` for testing/production setups).
 
 ## Status
 
-Accepted. Windows port is scheduled for Phase 2.
+Fully Implemented and Released (v1.6.2). Native E2E integration tests are verified on Linux, macOS, and Windows.
 
 ## References
-- Knowledge Graph: Windows porting requirements
-- IPC Protocol Specification: Fallback transport
+- Go coordinator TCP IPC implementation: `src/backend/go/pkg/ipc/ipc_server.go`
+- C++ daemon TCP IPC implementation: `src/backend/cpp/src/ipc_client.cpp`
+- Native Cross-Platform Test Harness: `scripts/integration_harness.py`
