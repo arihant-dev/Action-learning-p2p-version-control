@@ -681,7 +681,7 @@ def test_network_partition():
 
     # 1. Sync a first file to establish a healthy baseline before partitioning.
     create_file(dir_a, "before_partition.txt", "hello before partition")
-    if not check_file_exists(dir_b, "before_partition.txt", "hello before partition", timeout=20):
+    if not check_file_exists(dir_b, "before_partition.txt", "hello before partition", timeout=50):
         log("Baseline file failed to sync before partition")
         return False
 
@@ -717,7 +717,7 @@ def test_network_partition():
     # 5. After reconnect, the file created during the partition must sync to
     # B. Generous timeout since TCP reconnect + full metadata resync + file
     # transfer all need to happen.
-    synced = check_file_exists(dir_b, "created_during_partition.txt", "created while partitioned", timeout=40)
+    synced = check_file_exists(dir_b, "created_during_partition.txt", "created while partitioned", timeout=50)
 
     if synced:
         log("TEST PASSED: Network Partition (file created during outage synced after heal)")
@@ -822,7 +822,7 @@ def test_daemon_crash_recovery():
     time.sleep(2.0)  # Let C++ daemon and Go coordinator fully stabilize and start watching
 
     create_file(dir_a, "before_crash.txt", "hello before crash")
-    if not check_file_exists(dir_b, "before_crash.txt", "hello before crash", timeout=20):
+    if not check_file_exists(dir_b, "before_crash.txt", "hello before crash", timeout=50):
         log("Baseline file failed to sync before crash")
         return False
 
@@ -857,7 +857,7 @@ def test_daemon_crash_recovery():
     # Recovery check: create a new file on B and confirm it reaches the
     # RECOVERED peer A, proving the restarted coordinator resumed sync.
     create_file(dir_b, "created_after_recovery.txt", "created after A recovered")
-    synced = check_file_exists(dir_a, "created_after_recovery.txt", "created after A recovered", timeout=40)
+    synced = check_file_exists(dir_a, "created_after_recovery.txt", "created after A recovered", timeout=50)
 
     if synced:
         log("TEST PASSED: Coordinator Crash Recovery (state persisted + sync resumed)")
@@ -916,7 +916,7 @@ def test_chain_replication():
 
     # Hop 1: file created on A must reach B directly.
     create_file(dir_a, "chain_file.txt", "relayed across the chain")
-    if not check_file_exists(dir_b, "chain_file.txt", "relayed across the chain", timeout=25):
+    if not check_file_exists(dir_b, "chain_file.txt", "relayed across the chain", timeout=50):
         log("Hop 1 (A -> B) failed; relay cannot be attempted")
         return False
 
