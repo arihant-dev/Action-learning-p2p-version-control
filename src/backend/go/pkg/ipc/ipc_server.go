@@ -327,5 +327,5 @@ func deriveFallbackPort(socketPath string) int {
 	for i := 0; i < len(socketPath); i++ {
 		h = (h ^ uint32(socketPath[i])) * 16777619
 	}
-	return 10000 + int(h % 20000)
+	return 10000 + int(h%20000)
 }

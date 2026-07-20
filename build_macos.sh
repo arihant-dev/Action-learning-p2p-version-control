@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-VERSION="${VERSION:-1.0.1}"
+VERSION="${VERSION:-1.6.2}"
 VERSION="${VERSION#v}"
 APP_NAME="P2PVersionControl"
 
@@ -101,13 +101,23 @@ echo "--> 7. Creating distribution archive..."
     zip -r "../${APP_NAME}-${VERSION}-macos-${ARCH}.zip" "$APP_NAME.app"
 )
 
-echo "--> 8. Computing checksum..."
+echo "--> 8a. Computing ZIP checksum..."
 shasum -a 256 "target/${APP_NAME}-${VERSION}-macos-${ARCH}.zip"
+
+echo "--> 8b. Creating .dmg disk image..."
+DMG_NAME="${APP_NAME}-${VERSION}-macos-${ARCH}"
+hdiutil create -volname "${APP_NAME}" \
+    -srcfolder "target/bundle/$APP_NAME.app" \
+    -ov -format UDZO \
+    "target/${DMG_NAME}.dmg"
+echo "--> 8c. Computing DMG checksum..."
+shasum -a 256 "target/${DMG_NAME}.dmg"
 
 echo "===================================================="
 echo " Build Success!"
 echo "   Version: $VERSION"
-echo "   App Bundle: target/bundle/$APP_NAME.app"
-echo "   Archive:    target/${APP_NAME}-${VERSION}-macos-${ARCH}.zip"
-echo " Launch with: open target/bundle/$APP_NAME.app"
+   echo "   App Bundle: target/bundle/$APP_NAME.app"
+   echo "   Archive:    target/${APP_NAME}-${VERSION}-macos-${ARCH}.zip"
+   echo "   DMG:        target/${APP_NAME}-${VERSION}-macos-${ARCH}.dmg"
+   echo " Launch with: open target/bundle/$APP_NAME.app"
 echo "===================================================="

@@ -362,31 +362,6 @@ func TestSyncHistoryLogAndQuery(t *testing.T) {
 	}
 }
 
-func TestSyncHistoryUpdateStatus(t *testing.T) {
-	db := testDB(t)
-	repoStore := db.Repositories()
-	histStore := db.History()
-
-	repoStore.Save(&Repository{ID: "repo-1", LocalPath: "/test", Status: "active", SyncMode: "auto"})
-	histStore.LogEvent(&SyncEvent{
-		EventID: "ev-1", RepositoryID: "repo-1", FilePath: "a.txt",
-		PeerID: "peer-A", Timestamp: 100, EventType: "conflict_detected", Status: "pending",
-	})
-
-	// Update status from pending → resolved.
-	if err := histStore.UpdateStatus("ev-1", "success"); err != nil {
-		t.Fatalf("update status: %v", err)
-	}
-
-	events, _ := histStore.GetByRepository("repo-1")
-	if len(events) != 1 {
-		t.Fatalf("len = %d, want 1", len(events))
-	}
-	if events[0].Status != "success" {
-		t.Errorf("status = %q, want %q", events[0].Status, "success")
-	}
-}
-
 func TestSyncHistoryClear(t *testing.T) {
 	db := testDB(t)
 	repoStore := db.Repositories()

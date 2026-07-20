@@ -362,18 +362,6 @@ func (ft *FileTransferManager) finishSession(session *TransferSession, err error
 	}
 }
 
-func (ft *FileTransferManager) CleanupStaleSessions() {
-	ft.mu.Lock()
-	defer ft.mu.Unlock()
-	for id, s := range ft.sessions {
-		s.mu.Lock()
-		if s.Status == "completed" || s.Status == "failed" {
-			delete(ft.sessions, id)
-		}
-		s.mu.Unlock()
-	}
-}
-
 func readFileForUpload(path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -447,7 +435,7 @@ func dialWithFallback(address string, port int, timeout time.Duration, tlsCfg *t
 			for _, iface := range interfaces {
 				if (iface.Flags & net.FlagUp) != 0 {
 					zonedAddr := net.JoinHostPort(address+"%"+iface.Name, strconv.Itoa(port))
-					log.NewLogger("FileTransferManager").Warn().Msg("Trying fallback zoned address: "+zonedAddr)
+					log.NewLogger("FileTransferManager").Warn().Msg("Trying fallback zoned address: " + zonedAddr)
 					var c net.Conn
 					var e error
 					if tlsCfg != nil {
@@ -466,7 +454,7 @@ func dialWithFallback(address string, port int, timeout time.Duration, tlsCfg *t
 		localhosts := []string{"127.0.0.1", "::1"}
 		for _, lhost := range localhosts {
 			laddr := net.JoinHostPort(lhost, strconv.Itoa(port))
-			log.NewLogger("FileTransferManager").Warn().Msg("Trying local fallback address: "+laddr)
+			log.NewLogger("FileTransferManager").Warn().Msg("Trying local fallback address: " + laddr)
 			var c net.Conn
 			var e error
 			if tlsCfg != nil {

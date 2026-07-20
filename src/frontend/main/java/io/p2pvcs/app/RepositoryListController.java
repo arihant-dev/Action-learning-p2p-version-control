@@ -19,6 +19,7 @@ import javafx.util.Duration;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class RepositoryListController {
     @FXML
@@ -32,6 +33,7 @@ public class RepositoryListController {
     @FXML
     private Label peerCountLabel;
     private boolean isDarkMode = true;
+    private final Map<String, Stage> repoWindows = new ConcurrentHashMap<>();
 
     private Timeline pollTimeline;
     private final IpcBridge.MessageListener repoListListener = this::handleRepoListResponse;
@@ -140,6 +142,10 @@ public class RepositoryListController {
             themeToggleButton.setText("lightmode");
             isDarkMode = true;
         }
+
+        JsonObject settings = SettingsDialog.loadSettings();
+        settings.addProperty("theme", isDarkMode ? "dark" : "light");
+        SettingsDialog.saveSettings(settings);
     }
 
     @FXML
@@ -159,6 +165,13 @@ public class RepositoryListController {
         String selected = repoListView.getSelectionModel().getSelectedItem();
         if (selected == null) return;
 
+        Stage existing = repoWindows.get(selected);
+        if (existing != null && existing.isShowing()) {
+            existing.toFront();
+            existing.requestFocus();
+            return;
+        }
+
         try {
             FXMLLoader fxmlLoader = new FXMLLoader(P2PApplication.class.getResource("RepoStatusView.fxml"));
             Scene scene = new Scene(fxmlLoader.load(), 600, 450);
@@ -175,6 +188,8 @@ public class RepositoryListController {
             Stage stage = new Stage();
             stage.setTitle("Repo Status: " + selected);
             stage.setScene(scene);
+            stage.setOnHidden(e -> repoWindows.remove(selected));
+            repoWindows.put(selected, stage);
             stage.show();
         } catch (Exception e) {
             e.printStackTrace();

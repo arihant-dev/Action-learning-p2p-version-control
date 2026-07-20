@@ -23,14 +23,14 @@ src/backend/cpp/
 
 ## Build Requirements
 
-- **C++17 or later**
-- **CMake 3.10+**
-- **Internet connection** (to fetch dependencies via FetchContent)
+- **C++20**
+- **CMake 3.16+**
+- **OpenSSL** (for SHA-256 via EVP API)
 
 ### Linux
 
 ```bash
-sudo apt-get install build-essential cmake
+sudo apt-get install build-essential cmake libssl-dev
 ```
 
 ### macOS
@@ -38,12 +38,15 @@ sudo apt-get install build-essential cmake
 ```bash
 # Install Xcode Command Line Tools
 xcode-select --install
+# OpenSSL is usually available via the system or Homebrew
+brew install openssl
 ```
 
 ### Windows
 
 ```
 Visual Studio 2019+ with C++ development tools
+OpenSSL (via vcpkg or pre-built)
 ```
 
 ## Building
@@ -54,24 +57,29 @@ Visual Studio 2019+ with C++ development tools
 cd src/backend/cpp
 mkdir build
 cd build
-cmake ..
+cmake .. -DCMAKE_BUILD_TYPE=Release
 cmake --build .
+```
+
+### Testing (include tests)
+
+```bash
+cd src/backend/cpp
+mkdir build
+cd build
+cmake .. -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON
+cmake --build .
+ctest --output-on-failure
 ```
 
 ### Output
 
-The binary will be created at: `build/bin/cpp_daemon`
-
-### Testing
-
-```bash
-ctest --test-dir build --output-on-failure
-```
+The binary will be created at: `build/bin/p2p_daemon`
 
 ### Running
 
 ```bash
-./build/bin/cpp_daemon
+./build/bin/p2p_daemon
 ```
 
 for seeing the usage.
@@ -81,37 +89,34 @@ for seeing the usage.
 ### Basic Usage
 
 ```bash
-./cpp_daemon /path/to/watch
+./p2p_daemon <repo_id> <watch_path> [ipc_socket] [--poll-interval <ms>]
 ```
 
 ### Example
 
 ```bash
-./cpp_daemon ~/Documents/sync
+./p2p_daemon project-alpha /path/to/watch /tmp/p2p_sync.sock --poll-interval 500
 ```
 
 Once running, the daemon will output events like:
 
 ```
-P2P File Sync - C++ Daemon
-Watching directory: /home/user/sync
-Press Ctrl+C to stop
-
-[Linux] Starting file watcher on: /home/user/sync
-[Linux] Watch loop started
-[EVENT] File added: document.txt
-[JSON] {"timestamp":1715000000000,"action":"added","filename":"document.txt","type":"file_changed"}
+[C++ Daemon] Starting file watcher on: /path/to/watch
+[C++ Daemon] Connecting to IPC server at /tmp/p2p_sync.sock...
 ```
 
 ## Dependencies
 
-### Automatic (via FetchContent)
+### Build-Time
 
-- **nlohmann/json** - JSON parsing for IPC messages
-- **fmtlib** - Type-safe string formatting
+- **OpenSSL** (libcrypto, libssl) — SHA-256 hashing and TLS
 
-### Platform-Specific
+### Runtime (system libraries)
 
-- **Linux**: inotify (kernel API, no external dependency)
-- **macOS**: FSEvents (system framework)
+- **Linux**: inotify (kernel API, no external library)
+- **macOS**: FSEvents (system framework, via CoreServices)
 - **Windows**: ReadDirectoryChangesW (Windows API)
+
+### Automatic (via FetchContent, test builds only)
+
+- **GoogleTest** — unit test framework (fetched if not found on system)

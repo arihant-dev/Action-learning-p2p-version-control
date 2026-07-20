@@ -143,7 +143,9 @@ slides/
 # Runtime artifacts
 p2p_sync.db
 
+# Audit build artifacts
+build-audit/
+
 # Private environment/credentials
-.env
 .env*
 .env.local

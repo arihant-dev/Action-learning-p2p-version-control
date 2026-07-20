@@ -61,6 +61,13 @@ private:
         auto paths = static_cast<const char**>(eventPaths);
         for (size_t i = 0; i < numEvents; ++i) {
             std::string path(paths[i]);
+            if (path.compare(0, self->watchPath_.size(), self->watchPath_) == 0) {
+                if (path.size() > self->watchPath_.size() + 1) {
+                    path = path.substr(self->watchPath_.size() + 1);
+                } else {
+                    path = "";
+                }
+            }
             if (eventFlags[i] & kFSEventStreamEventFlagItemCreated)
                 if (self->callback_) self->callback_({WatchEventType::Created, path, ""});
             if (eventFlags[i] & kFSEventStreamEventFlagItemModified)

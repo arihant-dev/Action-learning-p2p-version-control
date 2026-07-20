@@ -700,12 +700,12 @@ func (sc *SyncCoordinator) queueProcessorLoop() {
 			sc.mu.RLock()
 			repoSem, hasRepoSem := sc.repoSemaphores[task.RepoID]
 			sc.mu.RUnlock()
-		if !hasRepoSem {
-			log.Printf("[SyncCoordinator] No semaphore for repo %s, requeueing task\n", task.RepoID)
-			sc.queue.Requeue(task)
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
+			if !hasRepoSem {
+				log.Printf("[SyncCoordinator] No semaphore for repo %s, requeueing task\n", task.RepoID)
+				sc.queue.Requeue(task)
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
 
 			select {
 			case <-sc.stopChan:
@@ -777,7 +777,7 @@ func (sc *SyncCoordinator) executeSyncTask(task *SyncTask) {
 			sc.queue.Requeue(task)
 			return
 		}
-		
+
 		log.Printf("[SyncCoordinator] Download request sent to peer %s for: %s\n", task.PeerID, task.FilePath)
 	}
 }
@@ -940,7 +940,7 @@ func (sc *SyncCoordinator) HandleP2PMessage(peerID string, msg *ipc.Message) err
 				log.Printf("[SyncCoordinator] Failed to write inline file: %v\n", err)
 				return nil
 			}
-			
+
 			// Update file_metadata in SQLite DB, preserving version set by HandlePeerMetadataUpdate
 			mtime := time.Now().Unix()
 			fileVersion := int64(1)
@@ -1472,7 +1472,7 @@ func (sc *SyncCoordinator) broadcastLocalMetadataUpdate(repoID string, filepath 
 		Source:    "go",
 		Timestamp: time.Now().UnixNano() / int64(time.Millisecond),
 	}
-	
+
 	sc.mu.RLock()
 	vclock := sc.vectorClock.AsMap()
 	sc.mu.RUnlock()

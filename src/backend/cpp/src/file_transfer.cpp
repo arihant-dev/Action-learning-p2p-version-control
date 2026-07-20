@@ -102,7 +102,7 @@ void handle_file_transfer(
     ::setsockopt(sock_fd, SOL_SOCKET, SO_SNDTIMEO, &sock_timeout, sizeof(sock_timeout));
     #endif
 
-    if (expected_size <= 0) {
+    if (expected_size < 0) {
         std::cerr << "[C++ Daemon] Invalid expected_size " << expected_size << "\n";
         closeSocket(sock_fd);
         return;

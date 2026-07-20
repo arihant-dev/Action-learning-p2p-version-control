@@ -57,21 +57,6 @@ func (sc *SyncCoordinator) loadVectorClocks() error {
 	return nil
 }
 
-func (sc *SyncCoordinator) persistVectorClock(repoID, filepath string, vc *versioning.VectorClock) error {
-	vcJSON, err := serializeVectorClock(vc)
-	if err != nil {
-		return err
-	}
-
-	meta, err := sc.db.Metadata().Get(repoID, filepath)
-	if err != nil || meta == nil {
-		return nil
-	}
-
-	meta.VectorClock = vcJSON
-	return sc.db.Metadata().Save(meta)
-}
-
 func (sc *SyncCoordinator) PersistAllVectorClocks() error {
 	repos, err := sc.db.Repositories().List()
 	if err != nil {

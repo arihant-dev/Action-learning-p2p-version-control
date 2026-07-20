@@ -295,7 +295,7 @@ func main() {
 	// Hook up incoming P2P message forwards
 	connMgr.SetOnMessage(func(peerID string, msg *ipc.Message) {
 		log.Printf("Received P2P message from peer %s: %s\n", peerID, msg.Type)
-		
+
 		// Let the coordinator process sync-related network messages first
 		if msg.Type == "file_metadata_update" || msg.Type == "file_request" || msg.Type == "file_response" {
 			if err := coord.HandleP2PMessage(peerID, msg); err != nil {
@@ -374,12 +374,6 @@ func main() {
 	if healthSrv != nil {
 		healthSrv.Close()
 	}
-}
-
-func handleFileChanged(msg *ipc.Message, connMgr *network.ConnectionManager) error {
-	fmt.Println("Broadcasting file change to all peers...")
-	connMgr.Broadcast(msg)
-	return nil
 }
 
 func sendPeerList(registry *discovery.PeerRegistry, connMgr *network.ConnectionManager, ipcServer *ipc.IpcServer) error {

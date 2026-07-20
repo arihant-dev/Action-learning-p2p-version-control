@@ -114,7 +114,7 @@ public:
             totalRead += n;
         }
         uint32_t len = ntohl(netLen);
-        if (len == 0 || len > 10 * 1024 * 1024) return false;
+        if (len == 0 || len > 1 * 1024 * 1024) return false;
         message.resize(len);
         totalRead = 0;
         while (totalRead < len) {
@@ -252,7 +252,7 @@ public:
             totalRead += n;
         }
         uint32_t len = ntohl(netLen);
-        if (len == 0 || len > 10 * 1024 * 1024) return false;
+        if (len == 0 || len > 1 * 1024 * 1024) return false;
         message.resize(len);
         totalRead = 0;
         while (totalRead < len) {

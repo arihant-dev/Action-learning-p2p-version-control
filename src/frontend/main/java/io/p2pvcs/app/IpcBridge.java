@@ -53,6 +53,7 @@ public class IpcBridge {
     private int reconnectFailures;
     private String resolvedSocketPath;
     private String resolvedDbPath;
+    private int resolvedTcpPort;
 
     public interface MessageListener {
         void onMessage(JsonElement payload);
@@ -171,6 +172,9 @@ public class IpcBridge {
                 }
                 env.put("IPC_SOCKET", resolvedSocketPath);
                 env.put("DB_PATH", resolvedDbPath);
+                if (resolvedTcpPort > 0) {
+                    env.put("IPC_TCP_PORT", String.valueOf(resolvedTcpPort));
+                }
                 
                 // Redirect output to a log file instead of inheriting in headless/App bundle mode
                 java.io.File logFile = new java.io.File(System.getProperty("java.io.tmpdir"), "p2p_go.log");
@@ -210,6 +214,19 @@ public class IpcBridge {
             socketPath = new java.io.File(tmpDir, "p2p_sync_" + System.getProperty("user.name") + ".sock").getAbsolutePath();
         }
         this.resolvedSocketPath = socketPath;
+
+        // Resolve TCP port (for environments without Unix sockets)
+        String tcpPortEnv = System.getenv("IPC_TCP_PORT");
+        if (tcpPortEnv != null && !tcpPortEnv.isEmpty()) {
+            try {
+                this.resolvedTcpPort = Integer.parseInt(tcpPortEnv);
+            } catch (NumberFormatException e) {
+                System.err.println("[Java] Invalid IPC_TCP_PORT: " + tcpPortEnv);
+                this.resolvedTcpPort = 0;
+            }
+        } else {
+            this.resolvedTcpPort = 0;
+        }
 
         // Resolve database path
         String dbPath;
@@ -346,16 +363,16 @@ public class IpcBridge {
             e.printStackTrace();
         }
 
-        // 2. Try TCP fallback
+        // 2. Try TCP (env var or fallback)
         try {
-            int port = deriveFallbackPort(resolvedSocketPath);
-            System.out.println("Trying TCP fallback on 127.0.0.1:" + port + "...");
+            int port = resolvedTcpPort > 0 ? resolvedTcpPort : deriveFallbackPort(resolvedSocketPath);
+            System.out.println("Trying TCP on 127.0.0.1:" + port + "...");
             SocketChannel channel = SocketChannel.open();
             channel.connect(new InetSocketAddress("127.0.0.1", port));
             System.out.println("Connected to TCP socket on port " + port + ".");
             return channel;
         } catch (Exception e) {
-            System.err.println("TCP fallback connection failed: ");
+            System.err.println("TCP connection failed: ");
             e.printStackTrace();
         }
 

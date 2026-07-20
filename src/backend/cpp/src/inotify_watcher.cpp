@@ -96,16 +96,28 @@ private:
                         relPath = it->second + "/" + name;
                     }
 
-                    if (event->mask & IN_CREATE)
+                    if (event->mask & IN_CREATE) {
                         if (callback_) callback_({WatchEventType::Created, relPath, ""});
+                        std::string fullPath = watchPath_ + "/" + relPath;
+                        struct stat st;
+                        if (::stat(fullPath.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) {
+                            addWatchRecursive(fullPath);
+                        }
+                    }
                     if (event->mask & IN_MODIFY)
                         if (callback_) callback_({WatchEventType::Modified, relPath, ""});
                     if (event->mask & IN_DELETE)
                         if (callback_) callback_({WatchEventType::Deleted, relPath, ""});
                     if (event->mask & IN_MOVED_FROM)
                         if (callback_) callback_({WatchEventType::Deleted, relPath, ""});
-                    if (event->mask & IN_MOVED_TO)
+                    if (event->mask & IN_MOVED_TO) {
                         if (callback_) callback_({WatchEventType::Created, relPath, ""});
+                        std::string fullPath = watchPath_ + "/" + relPath;
+                        struct stat st;
+                        if (::stat(fullPath.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) {
+                            addWatchRecursive(fullPath);
+                        }
+                    }
                 }
                 ptr += sizeof(inotify_event) + event->len;
             }

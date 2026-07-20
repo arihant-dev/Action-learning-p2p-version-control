@@ -335,14 +335,6 @@ func (cm *ConnectionManager) Connect(peerID, address string, port int) error {
 	return nil
 }
 
-// RemoveTarget disconnects from a peer and removes it from the auto-reconnection target list
-func (cm *ConnectionManager) RemoveTarget(peerID string) {
-	cm.mu.Lock()
-	delete(cm.targets, peerID)
-	cm.mu.Unlock()
-	cm.CloseConnection(peerID)
-}
-
 func (cm *ConnectionManager) readLoop(peerID string, conn net.Conn) {
 	defer cm.closeConnectionIfMatch(peerID, conn)
 

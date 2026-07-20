@@ -103,7 +103,7 @@ func (q *SyncQueue) Pop() *SyncTask {
 		if len(tasks) > 0 {
 			task := tasks[0]
 			q.queues[repoID] = tasks[1:]
-			
+
 			// Update nextRepo pointer for the next pop
 			q.nextRepo = (idx + 1) % numRepos
 			return task

@@ -36,21 +36,6 @@ func (s *HistoryStore) LogEvent(e *SyncEvent) error {
 	return nil
 }
 
-// UpdateStatus updates the status of an existing sync event.
-func (s *HistoryStore) UpdateStatus(eventID, status string) error {
-	result, err := s.db.Exec(`
-		UPDATE sync_history SET status = ? WHERE event_id = ?
-	`, status, eventID)
-	if err != nil {
-		return fmt.Errorf("update sync event status: %w", err)
-	}
-	n, _ := result.RowsAffected()
-	if n == 0 {
-		return fmt.Errorf("update sync event status: not found")
-	}
-	return nil
-}
-
 // GetByRepository returns all sync events for a given repository,
 // ordered by timestamp descending (most recent first).
 func (s *HistoryStore) GetByRepository(repoID string) ([]*SyncEvent, error) {
