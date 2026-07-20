@@ -359,8 +359,11 @@ def wire_peer(socket_path, peer_id, port, address="127.0.0.1"):
 def create_file(dir_path, filepath, content, mode=0o644):
     full_path = os.path.join(dir_path, filepath)
     os.makedirs(os.path.dirname(full_path), exist_ok=True)
-    with open(full_path, "w") as f:
-        f.write(content)
+    with open(full_path, "wb") as f:
+        if isinstance(content, str):
+            f.write(content.encode("utf-8"))
+        else:
+            f.write(content)
     if mode != 0o644:
         os.chmod(full_path, mode)
     return full_path
@@ -639,6 +642,17 @@ def test_concurrent_edits():
         return True
 
     log("TEST FAILED: neither peer logged a conflict_detected event in sync_history")
+    for pid, p in peers.items():
+        try:
+            conn = sqlite3.connect(p["db"], timeout=2.0)
+            cur = conn.execute("SELECT event_type, file_path, peer_id, timestamp, status FROM sync_history ORDER BY timestamp")
+            rows = cur.fetchall()
+            log(f"  [{pid}] sync_history contents ({len(rows)} rows):")
+            for r in rows:
+                log(f"      type={r[0]} file={r[1]} peer={r[2]} ts={r[3]} status={r[4]}")
+            conn.close()
+        except Exception as e:
+            log(f"  [{pid}] failed to dump sync_history: {e}")
     return False
 
 

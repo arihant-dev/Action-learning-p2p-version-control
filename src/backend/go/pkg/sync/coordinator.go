@@ -356,7 +356,15 @@ func (sc *SyncCoordinator) HandleLocalFileChanged(repoID string, payload *protoc
 	// 2. Determine per-file version and tick vector clock for causal ordering
 	var nextVersion int64 = 1
 	if existing != nil {
-		nextVersion = existing.Version + 1
+		// If existing metadata has size=0 (likely a spurious "created" from
+		// Windows ReadDirectoryChangesW before content was flushed), and this
+		// is a "modify" with actual content, reuse the existing version instead
+		// of bumping — the "created" already claimed version 1.
+		if existing.Size == 0 && payload.Size > 0 && payload.Action == "modify" {
+			nextVersion = existing.Version
+		} else {
+			nextVersion = existing.Version + 1
+		}
 	}
 	sc.lamportClock.Tick()
 	sc.vectorClock.Tick(sc.localPeerID)
@@ -487,6 +495,10 @@ func (sc *SyncCoordinator) HandlePeerMetadataUpdate(peerID string, repoID string
 
 	resolution := sc.detector.Resolve(localFV, remoteFV)
 
+	log.Printf("[SyncCoordinator] Conflict resolution for %s: action=%s isConflict=%v reason=%q localVer=%d localHash=%.8s remoteVer=%d remoteHash=%.8s\n",
+		path, resolution.Action, resolution.IsConflict, resolution.Reason,
+		localVer, localHash, version, hash)
+
 	// 2. Apply resolution
 	switch resolution.Action {
 	case versioning.AcceptRemote:
@@ -604,6 +616,9 @@ func (sc *SyncCoordinator) HandlePeerMetadataUpdate(peerID string, repoID string
 }
 
 func (sc *SyncCoordinator) logAndNotifyConflict(repoID, path string, local, remote versioning.FileVersion) {
+	log.Printf("[SyncCoordinator] logAndNotifyConflict called for %s (localVer=%d localHash=%.8s remoteVer=%d remoteHash=%.8s)\n",
+		path, local.LamportVersion, local.Hash, remote.LamportVersion, remote.Hash)
+
 	// Log conflict event to history DB
 	histEvent := sqlite.SyncEvent{
 		EventID:      fmt.Sprintf("conflict_%d", time.Now().UnixNano()),
