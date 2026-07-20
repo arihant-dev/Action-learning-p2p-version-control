@@ -47,8 +47,17 @@ public class P2PApplication extends Application {
 
         Task<Void> connectTask = new Task<>() {
             @Override
-            protected Void call() {
-                IpcBridge.getInstance().connect();
+            protected Void call() throws Exception {
+                IpcBridge bridge = IpcBridge.getInstance();
+                if (!bridge.connect()) {
+                    long deadline = System.currentTimeMillis() + 5000;
+                    while (!bridge.isConnected() && System.currentTimeMillis() < deadline) {
+                        Thread.sleep(100);
+                    }
+                    if (!bridge.isConnected()) {
+                        throw new RuntimeException("Failed to connect to sync daemon within timeout");
+                    }
+                }
                 return null;
             }
         };
@@ -69,7 +78,9 @@ public class P2PApplication extends Application {
         });
 
         connectTask.setOnFailed(e -> {
-            showErrorAndExit(stage, "Failed to connect to sync daemon: " + connectTask.getException().getMessage());
+            Throwable ex = connectTask.getException();
+            String msg = ex != null && ex.getMessage() != null ? ex.getMessage() : "Could not connect to sync daemon";
+            showErrorAndExit(stage, "Failed to connect to sync daemon: " + msg);
         });
 
         Thread connectThread = new Thread(connectTask, "IPC-Connect-Thread");

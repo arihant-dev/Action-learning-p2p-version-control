@@ -23,8 +23,20 @@ public class IpcBridge {
             String tmpDir = System.getProperty("java.io.tmpdir");
             java.io.File logFile = new java.io.File(tmpDir, "p2p_java.log");
             java.io.PrintStream logStream = new java.io.PrintStream(new java.io.FileOutputStream(logFile, true));
-            System.setOut(logStream);
-            System.setErr(logStream);
+            java.io.PrintStream consoleOut = System.out;
+            java.io.PrintStream consoleErr = System.err;
+            System.setOut(new java.io.PrintStream(new java.io.OutputStream() {
+                public void write(int b) throws java.io.IOException { logStream.write(b); consoleOut.write(b); }
+                public void write(byte[] b, int off, int len) throws java.io.IOException { logStream.write(b, off, len); consoleOut.write(b, off, len); }
+                public void flush() { logStream.flush(); consoleOut.flush(); }
+                public void close() { logStream.close(); }
+            }));
+            System.setErr(new java.io.PrintStream(new java.io.OutputStream() {
+                public void write(int b) throws java.io.IOException { logStream.write(b); consoleErr.write(b); }
+                public void write(byte[] b, int off, int len) throws java.io.IOException { logStream.write(b, off, len); consoleErr.write(b, off, len); }
+                public void flush() { logStream.flush(); consoleErr.flush(); }
+                public void close() { logStream.close(); }
+            }));
             System.out.println("\n--- Java Session Started: " + new java.util.Date() + " ---");
         } catch (Exception e) {
             e.printStackTrace();
@@ -63,7 +75,8 @@ public class IpcBridge {
                 }
             }
         } catch (Exception e) {
-            System.err.println("[Java] Failed walking up from java.home: " + e.getMessage());
+            System.err.println("[Java] Failed walking up from java.home: ");
+            e.printStackTrace();
         }
 
         // 2. Fallback: Protection domain URI (only works when not loading from modular jrt:)
@@ -80,7 +93,8 @@ public class IpcBridge {
                 }
             }
         } catch (Exception e) {
-            System.err.println("[Java] Failed walking up from protection domain: " + e.getMessage());
+            System.err.println("[Java] Failed walking up from protection domain: ");
+            e.printStackTrace();
         }
 
         // 3. Last resort
@@ -114,7 +128,8 @@ public class IpcBridge {
                         System.err.println("[Java] Go compilation failed with exit code: " + exitCode);
                     }
                 } catch (Exception e) {
-                    System.err.println("[Java] Error compiling Go coordinator: " + e.getMessage());
+                    System.err.println("[Java] Error compiling Go coordinator: ");
+                    e.printStackTrace();
                 }
             }
         } else {
@@ -141,6 +156,19 @@ public class IpcBridge {
                 pbGo.directory(baseDir); // Set working directory to project root!
                 
                 Map<String, String> env = pbGo.environment();
+                try {
+                    String settingsSocket = SettingsDialog.getSetting("ipc_socket", "");
+                    if (!settingsSocket.isEmpty()) {
+                        resolvedSocketPath = settingsSocket;
+                    }
+                    int settingsPort = SettingsDialog.getSetting("p2p_port", 0);
+                    if (settingsPort > 0) {
+                        env.put("P2P_PORT", String.valueOf(settingsPort));
+                    }
+                } catch (Exception ex) {
+                    System.err.println("[Java] Failed to read settings: ");
+                    ex.printStackTrace();
+                }
                 env.put("IPC_SOCKET", resolvedSocketPath);
                 env.put("DB_PATH", resolvedDbPath);
                 
@@ -166,7 +194,8 @@ public class IpcBridge {
                 System.err.println("[Java] Go coordinator binary not found! Cannot start.");
             }
         } catch (Exception e) {
-            System.err.println("[Java] Error starting Go coordinator process: " + e.getMessage());
+            System.err.println("[Java] Error starting Go coordinator process: ");
+            e.printStackTrace();
         }
     }
 
@@ -216,21 +245,28 @@ public class IpcBridge {
         return instance;
     }
 
-    public synchronized void connect() {
-        if (running) return;
+    public synchronized boolean connect() {
+        if (running) return true;
 
         ensureGoCoordinatorRunning();
+
+        socketChannel = tryConnect();
 
         running = true;
         readThread = new Thread(this::connectionLoop, "IPC-Reader-Thread");
         readThread.setDaemon(true);
         readThread.start();
+
+        return socketChannel != null && socketChannel.isConnected();
     }
 
     private void connectionLoop() {
         while (running) {
             try {
                 if (socketChannel == null || !socketChannel.isOpen() || !socketChannel.isConnected()) {
+                    if (socketChannel != null) {
+                        try { socketChannel.close(); } catch (IOException ignored) {}
+                    }
                     socketChannel = tryConnect();
                 }
 
@@ -239,7 +275,8 @@ public class IpcBridge {
                     readMessages(socketChannel);
                 }
             } catch (Exception e) {
-                System.err.println("IPC Connection error: " + e.getMessage());
+                System.err.println("IPC Connection error: ");
+                e.printStackTrace();
                 try {
                     if (socketChannel != null) {
                         socketChannel.close();
@@ -305,7 +342,8 @@ public class IpcBridge {
             System.out.println("Connected to UNIX domain socket.");
             return channel;
         } catch (Exception e) {
-            System.err.println("UNIX Domain Socket connection failed: " + e.getMessage());
+            System.err.println("UNIX Domain Socket connection failed: ");
+            e.printStackTrace();
         }
 
         // 2. Try TCP fallback
@@ -317,7 +355,8 @@ public class IpcBridge {
             System.out.println("Connected to TCP socket on port " + port + ".");
             return channel;
         } catch (Exception e) {
-            System.err.println("TCP fallback connection failed: " + e.getMessage());
+            System.err.println("TCP fallback connection failed: ");
+            e.printStackTrace();
         }
 
         return null;
@@ -366,13 +405,15 @@ public class IpcBridge {
                             try {
                                 listener.onMessage(payload);
                             } catch (Exception e) {
-                                System.err.println("[Java] Listener exception for type '" + type + "': " + e.getMessage());
+                                System.err.println("[Java] Listener exception for type '" + type + "': ");
+                                e.printStackTrace();
                             }
                         });
                     }
                 }
             } catch (Exception e) {
-                System.err.println("Failed to parse/dispatch message: " + e.getMessage());
+                System.err.println("Failed to parse/dispatch message: ");
+                e.printStackTrace();
             }
         }
     }
@@ -404,7 +445,8 @@ public class IpcBridge {
                 socketChannel.write(buf);
             }
         } catch (IOException e) {
-            System.err.println("Failed to send message: " + e.getMessage());
+            System.err.println("Failed to send message: ");
+            e.printStackTrace();
         }
     }
 
@@ -460,7 +502,8 @@ public class IpcBridge {
                 resolvedSocketPath + ".pid";
             java.nio.file.Files.deleteIfExists(java.nio.file.Paths.get(derivedPidPath));
         } catch (IOException e) {
-            System.err.println("[Java] Warning: Could not clean up temp files: " + e.getMessage());
+            System.err.println("[Java] Warning: Could not clean up temp files: ");
+            e.printStackTrace();
         }
     }
 }
