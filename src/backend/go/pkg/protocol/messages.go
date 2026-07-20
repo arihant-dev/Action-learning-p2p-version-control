@@ -3,6 +3,8 @@ package protocol
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
+	"strings"
 )
 
 // ============================================================================
@@ -284,6 +286,9 @@ func (p *FileRequestPayload) Validate() error {
 	}
 	if p.Hash == "" {
 		return errors.New("hash cannot be empty")
+	}
+	if filepath.IsAbs(p.Path) || strings.Contains(p.Path, "..") {
+		return errors.New("path must be relative and must not contain '..'")
 	}
 	return nil
 }

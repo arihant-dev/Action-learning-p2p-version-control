@@ -424,6 +424,12 @@ func (sc *SyncCoordinator) HandlePeerMetadataUpdate(peerID string, repoID string
 	if strings.HasSuffix(path, ".tmp") {
 		return
 	}
+
+	// Reject path traversal attempts from peers
+	if filepath.IsAbs(path) || strings.Contains(path, "..") {
+		log.Printf("[SyncCoordinator] Rejecting path traversal from peer %s: %s\n", peerID, path)
+		return
+	}
 	hash, _ := update["hash"].(string)
 	sizeVal, _ := update["size"].(float64)
 	verVal, _ := update["version"].(float64)
@@ -532,18 +538,26 @@ func (sc *SyncCoordinator) HandlePeerMetadataUpdate(peerID string, repoID string
 			}
 			_ = sc.db.Metadata().Save(&meta)
 
-			// Push download task
-			task := &SyncTask{
-				RepoID:    repoID,
-				FilePath:  path,
-				Type:      Download,
-				Hash:      hash,
-				Size:      size,
-				Timestamp: time.Unix(modifiedTime, 0),
-				PeerID:    peerID,
-				Mode:      mode,
+			// Check if we already have a pending download for this file+hash
+			sc.mu.RLock()
+			_, hasPending := sc.pendingDownloads[path+":"+hash]
+			sc.mu.RUnlock()
+			if hasPending || sc.queue.HasPending(repoID, path, hash) {
+				log.Printf("[SyncCoordinator] Download already pending for %s (hash %s), skipping duplicate\n", path, hash)
+			} else {
+				// Push download task
+				task := &SyncTask{
+					RepoID:    repoID,
+					FilePath:  path,
+					Type:      Download,
+					Hash:      hash,
+					Size:      size,
+					Timestamp: time.Unix(modifiedTime, 0),
+					PeerID:    peerID,
+					Mode:      mode,
+				}
+				sc.queue.Push(task)
 			}
-			sc.queue.Push(task)
 		}
 
 		if resolution.IsConflict {
@@ -558,7 +572,27 @@ func (sc *SyncCoordinator) HandlePeerMetadataUpdate(peerID string, repoID string
 			sc.sendMetadataUpdateToPeer(peerID, repoID, path, localMeta.Size, localVer, localHash, localTime, localMeta.IsDeleted, localMeta.Mode)
 		}
 	case versioning.Skip:
-		// Identical hashes, do nothing
+		// Identical hashes — normally nothing to do.
+		// But if the file is missing on disk (e.g., after a failed download), re-download.
+		if localMeta != nil && !localMeta.IsDeleted {
+			repo, _ := sc.db.Repositories().Get(repoID)
+			if repo != nil {
+				absPath := filepath.Join(repo.LocalPath, path)
+				if _, err := os.Stat(absPath); os.IsNotExist(err) {
+					log.Printf("[SyncCoordinator] File %s missing on disk despite matching DB hash — re-downloading\n", path)
+					sc.queue.Push(&SyncTask{
+						RepoID:    repoID,
+						FilePath:  path,
+						Type:      Download,
+						Hash:      hash,
+						Size:      size,
+						Timestamp: time.Unix(modifiedTime, 0),
+						PeerID:    peerID,
+						Mode:      mode,
+					})
+				}
+			}
+		}
 	}
 }
 
@@ -659,10 +693,12 @@ func (sc *SyncCoordinator) queueProcessorLoop() {
 			sc.mu.RLock()
 			repoSem, hasRepoSem := sc.repoSemaphores[task.RepoID]
 			sc.mu.RUnlock()
-			if !hasRepoSem {
-				log.Printf("[SyncCoordinator] No semaphore for repo %s, skipping task\n", task.RepoID)
-				continue
-			}
+		if !hasRepoSem {
+			log.Printf("[SyncCoordinator] No semaphore for repo %s, requeueing task\n", task.RepoID)
+			sc.queue.Requeue(task)
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
 
 			select {
 			case <-sc.stopChan:
@@ -693,7 +729,8 @@ func (sc *SyncCoordinator) executeSyncTask(task *SyncTask) {
 
 	if task.Type == Download {
 		if !sc.connMgr.IsConnected(task.PeerID) {
-			log.Printf("[SyncCoordinator] Transfer failed: peer %s disconnected\n", task.PeerID)
+			log.Printf("[SyncCoordinator] Transfer failed: peer %s disconnected, requeueing\n", task.PeerID)
+			sc.queue.Requeue(task)
 			return
 		}
 
@@ -729,7 +766,8 @@ func (sc *SyncCoordinator) executeSyncTask(task *SyncTask) {
 			sc.mu.Lock()
 			delete(sc.pendingDownloads, task.FilePath+":"+task.Hash)
 			sc.mu.Unlock()
-			log.Printf("[SyncCoordinator] Failed to send file_request to peer %s: %v\n", task.PeerID, err)
+			log.Printf("[SyncCoordinator] Failed to send file_request to peer %s: %v, requeueing\n", task.PeerID, err)
+			sc.queue.Requeue(task)
 			return
 		}
 		
@@ -780,7 +818,12 @@ func (sc *SyncCoordinator) HandleP2PMessage(peerID string, msg *ipc.Message) err
 
 		// File is found locally. Start upload session.
 		transferID := fmt.Sprintf("up_%d_%s", time.Now().UnixNano(), meta.RepositoryID)
-		transferPort, inlineData, err := sc.transferMgr.StartUpload(transferID, meta.Filepath, meta.RepositoryID, peerID, meta.Hash, meta.Size)
+		// Resolve repo root to pass as basePath so inline reads come from the correct location
+		basePath := ""
+		if repoForUpload, _ := sc.db.Repositories().Get(meta.RepositoryID); repoForUpload != nil {
+			basePath = repoForUpload.LocalPath
+		}
+		transferPort, inlineData, err := sc.transferMgr.StartUpload(transferID, meta.Filepath, basePath, meta.RepositoryID, peerID, meta.Hash, meta.Size)
 		if err != nil {
 			log.Printf("[SyncCoordinator] StartUpload failed for %s: %v\n", payload.Path, err)
 			resp := &ipc.Message{
@@ -870,6 +913,20 @@ func (sc *SyncCoordinator) HandleP2PMessage(peerID string, msg *ipc.Message) err
 				log.Printf("[SyncCoordinator] Repository not found for inline write: %s\n", pDetails.repoID)
 				return nil
 			}
+
+			// Reject path traversal on inline write
+			if filepath.IsAbs(payload.Path) || strings.Contains(payload.Path, "..") {
+				log.Printf("[SyncCoordinator] Rejecting path traversal on inline write: %s\n", payload.Path)
+				return nil
+			}
+
+			// Verify SHA-256 against the expected hash before writing
+			computedHash := fmt.Sprintf("%x", sha256.Sum256(data))
+			if payload.Hash != "" && computedHash != payload.Hash {
+				log.Printf("[SyncCoordinator] Inline file hash mismatch for %s: got %s, expected %s\n", payload.Path, computedHash, payload.Hash)
+				return nil
+			}
+
 			absPath := filepath.Join(repo.LocalPath, payload.Path)
 			err = os.WriteFile(absPath, data, os.FileMode(pDetails.mode))
 			if err != nil {
@@ -878,7 +935,6 @@ func (sc *SyncCoordinator) HandleP2PMessage(peerID string, msg *ipc.Message) err
 			}
 			
 			// Update file_metadata in SQLite DB, preserving version set by HandlePeerMetadataUpdate
-			hash := fmt.Sprintf("%x", sha256.Sum256(data))
 			mtime := time.Now().Unix()
 			fileVersion := int64(1)
 			if existingMeta, _ := sc.db.Metadata().Get(pDetails.repoID, payload.Path); existingMeta != nil {
@@ -887,7 +943,7 @@ func (sc *SyncCoordinator) HandleP2PMessage(peerID string, msg *ipc.Message) err
 			meta := &sqlite.FileMetadata{
 				RepositoryID:      pDetails.repoID,
 				Filepath:          payload.Path,
-				Hash:              hash,
+				Hash:              computedHash,
 				Size:              int64(len(data)),
 				Version:           fileVersion,
 				LocalLastModified: mtime,

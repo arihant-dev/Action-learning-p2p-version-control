@@ -41,6 +41,7 @@ coverage.out
 
 # C/C++
 build/
+build-*/
 cmake-build-*/
 CMakeFiles/
 CMakeCache.txt

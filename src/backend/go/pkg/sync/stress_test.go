@@ -440,7 +440,7 @@ func TestStressLargeFileTransfer(t *testing.T) {
 	ft := transfer.NewFileTransferManager(ipcServer)
 
 	start := time.Now()
-	_, _, err = ft.StartUpload("large_up", "large.dat", "repo", "remote-peer", "large-hash", fileSize)
+	_, _, err = ft.StartUpload("large_up", "large.dat", "", "repo", "remote-peer", "large-hash", fileSize)
 	if err != nil {
 		t.Fatalf("StartUpload: %v", err)
 	}

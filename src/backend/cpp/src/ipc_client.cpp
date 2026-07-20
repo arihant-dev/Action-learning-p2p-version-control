@@ -70,6 +70,11 @@ public:
             WSACleanup();
             return false;
         }
+
+        // Set receive timeout so blocking recv() can be interrupted on shutdown.
+        // Timeouts do NOT disconnect — the caller retries and checks g_shutdown.
+        DWORD timeout = 3000;
+        setsockopt(socket_, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
         return true;
     }
 
@@ -98,7 +103,14 @@ public:
         uint32_t totalRead = 0;
         while (totalRead < sizeof(netLen)) {
             int n = ::recv(socket_, reinterpret_cast<char*>(&netLen) + totalRead, sizeof(netLen) - totalRead, 0);
-            if (n <= 0) return false;
+            if (n <= 0) {
+                int err = WSAGetLastError();
+                if (err == WSAETIMEDOUT) {
+                    return false; // timeout only — keep connection alive
+                }
+                disconnect(); // real error
+                return false;
+            }
             totalRead += n;
         }
         uint32_t len = ntohl(netLen);
@@ -107,7 +119,15 @@ public:
         totalRead = 0;
         while (totalRead < len) {
             int n = ::recv(socket_, &message[totalRead], len - totalRead, 0);
-            if (n <= 0) return false;
+            if (n <= 0) {
+                int err = WSAGetLastError();
+                if (err == WSAETIMEDOUT) {
+                    disconnect(); // partial read + timeout → must reconnect for clean framing
+                } else {
+                    disconnect();
+                }
+                return false;
+            }
             totalRead += n;
         }
         return true;
@@ -160,6 +180,13 @@ public:
                 socketFd_ = -1;
                 return false;
             }
+
+            // Set receive timeout so blocking read() can be interrupted on shutdown.
+            // Timeouts do NOT disconnect — the caller retries and checks g_shutdown.
+            struct timeval tv;
+            tv.tv_sec = 3;
+            tv.tv_usec = 0;
+            setsockopt(socketFd_, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
             return true;
         }
 
@@ -176,6 +203,13 @@ public:
             socketFd_ = -1;
             return false;
         }
+
+        // Set receive timeout so blocking read() can be interrupted on shutdown.
+        // Timeouts do NOT disconnect — the caller retries and checks g_shutdown.
+        struct timeval tv;
+        tv.tv_sec = 3;
+        tv.tv_usec = 0;
+        setsockopt(socketFd_, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
         return true;
     }
 
@@ -204,7 +238,17 @@ public:
         size_t totalRead = 0;
         while (totalRead < sizeof(netLen)) {
             ssize_t n = ::read(socketFd_, reinterpret_cast<char*>(&netLen) + totalRead, sizeof(netLen) - totalRead);
-            if (n <= 0) return false;
+            if (n < 0) {
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    return false; // timeout only — keep connection alive
+                }
+                disconnect(); // real error
+                return false;
+            }
+            if (n == 0) { // EOF — peer disconnected
+                disconnect();
+                return false;
+            }
             totalRead += n;
         }
         uint32_t len = ntohl(netLen);
@@ -213,7 +257,18 @@ public:
         totalRead = 0;
         while (totalRead < len) {
             ssize_t n = ::read(socketFd_, &message[totalRead], len - totalRead);
-            if (n <= 0) return false;
+            if (n < 0) {
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    disconnect(); // partial read + timeout → must reconnect for clean framing
+                } else {
+                    disconnect();
+                }
+                return false;
+            }
+            if (n == 0) {
+                disconnect();
+                return false;
+            }
             totalRead += n;
         }
         return true;

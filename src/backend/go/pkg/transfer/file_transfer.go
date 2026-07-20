@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -107,9 +108,13 @@ func (ft *FileTransferManager) StartDownload(transferID, filePath, repoID, peerI
 	return nil
 }
 
-func (ft *FileTransferManager) StartUpload(transferID, filePath, repoID, peerID, expectedHash string, expectedSize int64) (int, string, error) {
+func (ft *FileTransferManager) StartUpload(transferID, filePath, basePath, repoID, peerID, expectedHash string, expectedSize int64) (int, string, error) {
 	if expectedSize <= 1024 {
-		data, err := readFileForUpload(filePath)
+		readPath := filePath
+		if basePath != "" {
+			readPath = filepath.Join(basePath, filePath)
+		}
+		data, err := readFileForUpload(readPath)
 		if err == nil {
 			return 0, data, nil
 		}

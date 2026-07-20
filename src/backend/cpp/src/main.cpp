@@ -178,9 +178,10 @@ int main(int argc, char* argv[]) {
                         auto msg = nlohmann::json::parse(raw);
                         handle_ipc_message(msg, repo_id, watch_path);
                     } catch (...) {}
-                } else {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                }
+            } else {
+                if (g_shutdown) break;
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
             }
         }
     });
@@ -275,7 +276,9 @@ int main(int argc, char* argv[]) {
 
             if (ipc_client->isConnected()) {
                 std::cout << "[C++ Daemon] Sending IPC change\n";
-                ipc_client->send(message.dump());
+                if (!ipc_client->send(message.dump())) {
+                    std::cout << "[C++ Daemon] IPC send failed\n";
+                }
             } else {
                 std::cout << "[C++ Daemon] IPC disconnected, change not sent\n";
             }
